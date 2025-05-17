@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
 plugins {
     id("java")
     application
@@ -8,8 +10,7 @@ group = "edu.kit.kastel.logic"
 version = "1.0-SNAPSHOT"
 
 application {
-    mainModule = "edu.kit.kastel.vads.compiler"
-    mainClass = "edu.kit.kastel.vads.compiler.Main"
+    mainClass = "edu.kit.kastel.vads.compiler.MainKt"
 }
 
 repositories {
@@ -32,4 +33,8 @@ tasks.test {
 }
 kotlin {
     jvmToolchain(23)
+}
+val compileKotlin: KotlinCompile by tasks
+compileKotlin.compilerOptions {
+    freeCompilerArgs.set(listOf("-Xwhen-guards", "-Xcontext-parameters"))
 }
