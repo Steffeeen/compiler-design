@@ -17,4 +17,8 @@ class Namespace<T> {
     fun get(name: AstNode.NameNode): T? {
         return content[name.name]
     }
+
+    operator fun contains(name: AstNode.NameNode): Boolean {
+        return content.containsKey(name.name)
+    }
 }
