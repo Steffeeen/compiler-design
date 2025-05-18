@@ -164,6 +164,11 @@ private fun StringBuilder.generateReturn(node: IrNode.ReturnNode) {
 }
 
 private fun StringBuilder.generateInstruction(instruction: Instruction, vararg operands: String) {
+    if (instruction == Instruction.MOV && operands.size == 2 && operands[0] == operands[1]) {
+        // don't generate redundant MOV instructions
+        return
+    }
+
     appendLine("$instruction ${operands.joinToString(", ")}")
 }
 
