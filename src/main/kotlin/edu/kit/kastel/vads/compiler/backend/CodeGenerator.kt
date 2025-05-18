@@ -50,7 +50,7 @@ private fun linearizeNode(node: IrNode): List<IrNode> {
         is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result) + linearizeNode(node.sideEffect)
         is IrNode.SideEffectProjectionNode -> linearizeNode(node.inNode)
         IrNode.StartNode -> listOf()
-    }
+    }.distinct()
 }
 
 private fun StringBuilder.prefix() {
