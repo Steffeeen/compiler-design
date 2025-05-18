@@ -10,22 +10,22 @@ data class X86StackRegister(val index: Int) : X86Register {
 }
 
 enum class X86Registers : X86Register {
-    RAX,
-    RBX,
-    RCX,
-    RDX,
+    EAX,
+    EBX,
+    ECX,
+    EDX,
     RSP,
     RBP,
-    RSI,
-    RDI,
-    R8,
-    R9,
-    R10,
-    R11,
-    R12,
-    R13,
-    R14,
-    R15;
+    ESI,
+    EDI,
+    R8D,
+    R9D,
+    R10D,
+    R11D,
+    R12D,
+    R13D,
+    R14D,
+    R15D;
 
     override fun toString(): String = name.lowercase()
 }

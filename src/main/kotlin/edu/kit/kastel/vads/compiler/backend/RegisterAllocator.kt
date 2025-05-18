@@ -11,9 +11,9 @@ class SimpleX86RegisterAllocator : RegisterAllocator<X86Register> {
         val map = mutableMapOf<IrNode, X86Register>()
 
         val availableRegisters: MutableList<X86Register> = X86Registers.entries.toMutableList()
-        availableRegisters.remove(X86Registers.RAX)
-        availableRegisters.remove(X86Registers.RDX)
-        availableRegisters.remove(X86Registers.RCX)
+        availableRegisters.remove(X86Registers.EAX)
+        availableRegisters.remove(X86Registers.EDX)
+        availableRegisters.remove(X86Registers.ECX)
         availableRegisters.remove(X86Registers.RSP)
         availableRegisters.remove(X86Registers.RBP)
 

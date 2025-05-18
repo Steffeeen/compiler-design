@@ -97,9 +97,9 @@ private fun StringBuilder.generateBinaryOperation(instruction: Instruction, node
         leftRegister -> generateInstruction(instruction, register.toString(), node.right.valueOrRegister())
         rightRegister if commutative -> generateInstruction(instruction, register.toString(), node.left.valueOrRegister())
         !is X86Registers -> {
-            generateInstruction(Instruction.MOV, X86Registers.RAX.toString(), node.left.valueOrRegister())
-            generateInstruction(instruction, X86Registers.RAX.toString(), node.right.valueOrRegister())
-            generateInstruction(Instruction.MOV, register.toString(), X86Registers.RAX.toString())
+            generateInstruction(Instruction.MOV, X86Registers.EAX.toString(), node.left.valueOrRegister())
+            generateInstruction(instruction, X86Registers.EAX.toString(), node.right.valueOrRegister())
+            generateInstruction(Instruction.MOV, register.toString(), X86Registers.EAX.toString())
         }
 
         else -> {
@@ -113,20 +113,20 @@ context(registerAllocation: Map<IrNode, X86Register>)
 private fun StringBuilder.generateDiv(node: IrNode.BinaryOperationNode) {
     require(node is IrNode.DivNode || node is IrNode.ModNode)
 
-    generateInstruction(Instruction.MOV, X86Registers.RAX.toString(), node.left.valueOrRegister())
+    generateInstruction(Instruction.MOV, X86Registers.EAX.toString(), node.left.valueOrRegister())
     generateInstruction(Instruction.CDQ)
 
     if (node.right is IrNode.IntegerConstantNode) {
-        generateInstruction(Instruction.MOV, X86Registers.RCX.toString(), node.right.valueOrRegister())
-        generateInstruction(Instruction.IDIV, X86Registers.RCX.toString())
+        generateInstruction(Instruction.MOV, X86Registers.ECX.toString(), node.right.valueOrRegister())
+        generateInstruction(Instruction.IDIV, X86Registers.ECX.toString())
     } else {
         generateInstruction(Instruction.IDIV, node.right.valueOrRegister())
     }
 
     if (node is IrNode.DivNode) {
-        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), X86Registers.RAX.toString())
+        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), X86Registers.EAX.toString())
     } else {
-        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), X86Registers.RDX.toString())
+        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), X86Registers.EDX.toString())
     }
 }
 
@@ -138,7 +138,7 @@ private fun StringBuilder.generateNegate(node: IrNode.NegateNode) {
 
 context(registerAllocation: Map<IrNode, X86Register>)
 private fun StringBuilder.generateReturn(node: IrNode.ReturnNode) {
-    generateInstruction(Instruction.MOV, X86Registers.RAX.toString(), node.result.valueOrRegister())
+    generateInstruction(Instruction.MOV, X86Registers.EAX.toString(), node.result.valueOrRegister())
     generateInstruction(Instruction.RET)
 }
 
