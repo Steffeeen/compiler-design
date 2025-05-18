@@ -74,7 +74,7 @@ private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus
 }
 
 private fun updateStatus(data: Namespace<VariableStatus>, status: VariableStatus, name: AstNode.NameNode): SemanticError? {
-    if (data.get(name) == VariableStatus.INITIALIZED && status == VariableStatus.DECLARED) {
+    if (data.get(name) == VariableStatus.INITIALIZED && status == VariableStatus.DECLARED || data.get(name) == VariableStatus.DECLARED && status == VariableStatus.DECLARED) {
         return SemanticError.VariableAlreadyExists(name)
     }
 
