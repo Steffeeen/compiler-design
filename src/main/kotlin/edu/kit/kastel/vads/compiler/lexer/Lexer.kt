@@ -151,7 +151,7 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
     }
 
     private fun lexNumber(): Token {
-        if (this.isHexPrefix) {
+        if (isHexPrefix()) {
             var off = 2
             while (hasMore(off) && isHex(peek(off))) {
                 off++
@@ -173,9 +173,10 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
         return NumberLiteral(this.source.substring(this.pos, this.pos + off), 10, buildSpan(off))
     }
 
-    private val isHexPrefix: Boolean
-        get() = peek() == '0' && hasMore(1) && (peek(1) == 'x' || peek(1) == 'X')
-
+    private fun isHexPrefix(): Boolean {
+        return peek() == '0' && hasMore(1) && (peek(1) == 'x' || peek(1) == 'X')
+    }
+    
     private fun isIdentifierChar(c: Char): Boolean {
         return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
     }

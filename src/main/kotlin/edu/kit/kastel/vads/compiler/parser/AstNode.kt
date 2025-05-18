@@ -106,7 +106,7 @@ sealed interface AstNode {
 
         private fun parseHexadecimal(end: Int): Long? {
             return try {
-                value.substring(0, end).toUInt(16).toLong()
+                value.substring(2, end).toUInt(16).toLong()
             } catch (e: NumberFormatException) {
                 null
             }
