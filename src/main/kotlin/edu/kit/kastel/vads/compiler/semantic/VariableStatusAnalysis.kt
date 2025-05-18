@@ -56,6 +56,7 @@ private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus
         declarationNode: AstNode.DeclarationNode,
         data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>?
     ) {
+        checkUndeclared(declarationNode.name, data?.first?.get(declarationNode.name))?.let { data?.second?.add(it) }
         val status = if (declarationNode.initializer == null) VariableStatus.DECLARED else VariableStatus.INITIALIZED
 
         updateStatus(data!!.first, status, declarationNode.name)?.let { data.second.add(it) }
@@ -92,6 +93,13 @@ private fun checkInitialized(name: AstNode.NameNode, status: VariableStatus?): S
 private fun checkDeclared(name: AstNode.NameNode, status: VariableStatus?): SemanticError? {
     if (status == null) {
         return SemanticError.VariableNotDeclaredBeforeAssignment(name)
+    }
+    return null
+}
+
+private fun checkUndeclared(name: AstNode.NameNode, status: VariableStatus?): SemanticError? {
+    if (status != null) {
+        return SemanticError.VariableAlreadyExists(name)
     }
     return null
 }
