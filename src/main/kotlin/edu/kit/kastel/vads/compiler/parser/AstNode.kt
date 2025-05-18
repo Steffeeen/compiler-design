@@ -82,19 +82,34 @@ sealed interface AstNode {
         }
 
         fun parseValue(): Long? {
-            var begin = 0
-            val end: Int = value.length
-            if (base == 16) {
-                begin = 2 // ignore 0x
+            return when (base) {
+                10 -> parseDecimal(value.length)
+                16 -> parseHexadecimal(value.length)
+                else -> error("Unsupported base $base")
             }
+        }
+
+        private fun parseDecimal(end: Int): Long? {
             val l: Long
             try {
-                l = value.substring(begin, end).toLong(base)
+                l = value.substring(0, end).toLong(10)
             } catch (_: NumberFormatException) {
                 return null
             }
 
-            return l.takeIf { it > 0 && it <= Integer.MAX_VALUE }
+            if (l < 0 || l > Integer.toUnsignedLong(Integer.MIN_VALUE)) {
+                return null
+            }
+
+            return l
+        }
+
+        private fun parseHexadecimal(end: Int): Long? {
+            return try {
+                value.substring(0, end).toUInt(16).toLong()
+            } catch (e: NumberFormatException) {
+                null
+            }
         }
     }
 
