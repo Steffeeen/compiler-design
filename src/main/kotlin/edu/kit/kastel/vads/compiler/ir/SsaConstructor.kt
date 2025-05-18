@@ -24,7 +24,7 @@ fun buildIr(function: AstNode.FunctionNode): IrGraph {
         createReturnIrNode(returnStatement, sideEffectNode)
     }
 
-    return IrGraph(returnIrNode)
+    return IrGraph(returnIrNode, function.name.name.asString())
 }
 
 context(currentDefinitions: MutableMap<SymbolName, IrNode>)
@@ -129,7 +129,7 @@ private fun handleDeclarationNode(declarationNode: AstNode.DeclarationNode, last
 }
 
 private fun createConstantIntegerIrNode(literalAstNode: AstNode.LiteralNode): IrNode.IntegerConstantNode {
-    return IrNode.IntegerConstantNode(literalAstNode.value.toInt())
+    return IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
 }
 
 context(currentDefinitions: MutableMap<SymbolName, IrNode>)
