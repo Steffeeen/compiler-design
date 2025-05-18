@@ -29,6 +29,13 @@ private fun IrGraph.linearize(): List<IrNode> {
 
 private fun linearizeNode(node: IrNode): List<IrNode> {
     return when (node) {
+        is IrNode.DivNode, is IrNode.ModNode -> {
+            if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
+                listOf(node)
+            } else {
+                listOf(node) + linearizeNode(node.left) + linearizeNode(node.right) + linearizeNode(node.sideEffect)
+            }
+        }
         is IrNode.BinaryOperationNode -> {
             if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
                 listOf(node)
@@ -40,7 +47,7 @@ private fun linearizeNode(node: IrNode): List<IrNode> {
         is IrNode.IntegerConstantNode -> listOf(node)
         is IrNode.NegateNode -> listOf(node) + linearizeNode(node.inNode)
         IrNode.NoOpNode -> listOf()
-        is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result)
+        is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result) + linearizeNode(node.sideEffect)
         is IrNode.SideEffectProjectionNode -> linearizeNode(node.inNode)
         IrNode.StartNode -> listOf()
     }
