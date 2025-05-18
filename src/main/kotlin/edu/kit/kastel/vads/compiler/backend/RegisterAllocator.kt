@@ -30,11 +30,15 @@ class SimpleX86RegisterAllocator : RegisterAllocator<X86Register> {
 
         for (node in nodes) {
             if (node.needsRegister()) {
-                val register = availableRegisters.removeFirstOrNull()
-                if (register != null) {
-                    map[node] = register
+                if (node is IrNode.NegateNode && node.inNode in map) {
+                    map[node] = map[node.inNode]!!
                 } else {
-                    map[node] = X86StackRegister(stackRegisterCount++)
+                    val register = availableRegisters.removeFirstOrNull()
+                    if (register != null) {
+                        map[node] = register
+                    } else {
+                        map[node] = X86StackRegister(stackRegisterCount++)
+                    }
                 }
             }
         }
