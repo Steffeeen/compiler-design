@@ -10,6 +10,7 @@ import edu.kit.kastel.vads.compiler.parser.Type.IntType
 sealed class ParseError(open val span: Span) : Exception() {
     data class UnexpectedToken(val token: Token, override val span: Span) : ParseError(span)
     data class UnexpectedEndOfFile(override val span: Span) : ParseError(span)
+    data class ExpectedEndOfFile(override val span: Span) : ParseError(span)
 }
 
 sealed interface ParseResult {
@@ -30,7 +31,15 @@ fun parse(tokenSource: TokenSource): ParseResult {
 }
 
 private class Parser(private val tokenSource: TokenSource, private val options: CompilerOptions) {
-    fun parseProgram(): ProgramNode = ProgramNode(listOf(parseFunction()))
+    fun parseProgram(): ProgramNode {
+        val program = ProgramNode(listOf(parseFunction()))
+
+        if (!tokenSource.hasNoMoreTokens()) {
+            throw ParseError.ExpectedEndOfFile(tokenSource.peek()!!.span)
+        }
+
+        return program
+    }
 
     private fun parseFunction(): FunctionNode {
         val returnType = expect<Keyword, KeywordType>(KeywordType.INT)
