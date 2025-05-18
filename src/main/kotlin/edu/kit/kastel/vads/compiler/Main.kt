@@ -103,8 +103,8 @@ private fun assembleOnLinux(assembly: String, tempFile: Path, binary: Path) {
 
 private fun assembleOnMac(assembly: String, tempFile: Path, binary: Path) {
     val fixedAssembly = assembly
-        .replace("main", "_main")
-        .replace(".global", "global")
+        .replace(Regex("^main:", RegexOption.MULTILINE), "_main:")
+        .replace(".global main", "global _main")
         .replace(".intel_syntax noprefix", "")
     Files.writeString(tempFile, fixedAssembly)
 
