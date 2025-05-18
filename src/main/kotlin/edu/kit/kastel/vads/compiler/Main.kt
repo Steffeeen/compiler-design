@@ -17,6 +17,7 @@ import kotlin.system.exitProcess
 data class CompilerOptions(
     val printAst: Boolean = false,
     val printIrToFile: Boolean = false,
+    val printAssembly: Boolean = false,
 )
 
 fun main(args: Array<String>) = with(CompilerOptions()) {
@@ -64,6 +65,11 @@ fun main(args: Array<String>) = with(CompilerOptions()) {
     }
 
     val assembly = generateX86Assembly(irGraphs)
+
+    if (printAssembly) {
+        println(assembly.assembly)
+    }
+
     assembly.assembleTo(output)
 }
 
