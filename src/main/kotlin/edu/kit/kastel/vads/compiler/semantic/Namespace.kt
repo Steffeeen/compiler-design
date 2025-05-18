@@ -10,6 +10,10 @@ class Namespace<T> {
         content.merge(name.name, value!!, merger)
     }
 
+    fun put(name: AstNode.NameNode, value: T) {
+        content[name.name] = value
+    }
+
     fun get(name: AstNode.NameNode): T? {
         return content[name.name]
     }

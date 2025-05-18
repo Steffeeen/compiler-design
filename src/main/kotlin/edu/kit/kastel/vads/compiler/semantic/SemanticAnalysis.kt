@@ -3,10 +3,14 @@ package edu.kit.kastel.vads.compiler.semantic
 import edu.kit.kastel.vads.compiler.CompilerOptions
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
+import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 
 sealed interface SemanticError {
     data class InvalidIntegerLiteralRange(val node: AstNode.LiteralNode) : SemanticError
     data class NoReturnStatement(val node: AstNode.FunctionNode) : SemanticError
+    data class VariableAlreadyExists(val node: AstNode.NameNode) : SemanticError
+    data class VariableNotDeclaredBeforeAssignment(val node: AstNode.NameNode) : SemanticError
+    data class VariableNotInitialized(val node: AstNode.NameNode) : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -28,7 +32,7 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
     override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
         val errors = mutableListOf<SemanticError>()
 
-        program.accept(object : NoOpVisitor<Unit?> {
+        val visitor = object : NoOpVisitor<Unit?> {
             override fun visit(literalNode: AstNode.LiteralNode, data: Unit?) {
                 if (literalNode.parseValue() != null) {
                     return super.visit(literalNode, data)
@@ -37,7 +41,9 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
                 errors += SemanticError.InvalidIntegerLiteralRange(literalNode)
                 return super.visit(literalNode, data)
             }
-        }, null)
+        }
+
+        program.accept(RecursivePostorderVisitor(visitor), null)
         return errors
     }
 }
