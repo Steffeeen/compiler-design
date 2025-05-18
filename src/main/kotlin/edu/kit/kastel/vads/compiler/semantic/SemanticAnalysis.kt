@@ -20,12 +20,19 @@ interface SemanticAnalysis {
 context(options: CompilerOptions)
 fun analyzeProgram(program: AstNode.ProgramNode): SemanticError? {
     val analyses = listOf(
+        ReturnAnalysis,
         IntegerLiteralRangeAnalysis,
-        VariableStatusAnalysis,
-        ReturnAnalysis
+        VariableStatusAnalysis
     )
 
-    return analyses.flatMap { it.analyze(program) }.firstOrNull()
+    for (analysis in analyses) {
+        val result = analysis.analyze(program)
+        if (result.isNotEmpty()) {
+            return result.first()
+        }
+    }
+
+    return null
 }
 
 private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
