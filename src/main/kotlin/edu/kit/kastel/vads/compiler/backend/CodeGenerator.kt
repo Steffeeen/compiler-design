@@ -31,7 +31,7 @@ private fun linearizeNode(node: IrNode): List<IrNode> {
     return when (node) {
         is IrNode.DivNode, is IrNode.ModNode -> {
             if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
-                listOf(node)
+                listOf(node) + linearizeNode(node.sideEffect)
             } else {
                 listOf(node) + linearizeNode(node.left) + linearizeNode(node.right) + linearizeNode(node.sideEffect)
             }
