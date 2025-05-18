@@ -11,6 +11,7 @@ sealed class ParseError(open val span: Span) : Exception() {
     data class UnexpectedToken(val token: Token, override val span: Span) : ParseError(span)
     data class UnexpectedEndOfFile(override val span: Span) : ParseError(span)
     data class ExpectedEndOfFile(override val span: Span) : ParseError(span)
+    data class FunctionNotNamedMain(override val span: Span) : ParseError(span)
 }
 
 sealed interface ParseResult {
@@ -44,6 +45,11 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
     private fun parseFunction(): FunctionNode {
         val returnType = expect<Keyword, KeywordType>(KeywordType.INT)
         val identifier = expect<Identifier>()
+
+        if (identifier.value != "main") {
+            throw ParseError.FunctionNotNamedMain(identifier.span)
+        }
+
         expect<Separator, SeparatorType>(SeparatorType.PAREN_OPEN)
         expect<Separator, SeparatorType>(SeparatorType.PAREN_CLOSE)
         val body = parseBlock()
