@@ -93,13 +93,20 @@ private fun createNegateIrNode(
 
 context(currentDefinitions: MutableMap<SymbolName, IrNode>)
 private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode, IrNode.SideEffectNode> {
-    val desugar: ((IrNode, IrNode) -> IrNode)? = when (assignmentNode.operator.type) {
+    val desugar: ((IrNode, IrNode, IrNode.SideEffectNode) -> Pair<IrNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator.type) {
         Token.OperatorType.ASSIGN -> null
-        Token.OperatorType.ASSIGN_ADD -> { left, right -> IrNode.AddNode(left, right) }
-        Token.OperatorType.ASSIGN_SUB -> { left, right -> IrNode.SubNode(left, right) }
-        Token.OperatorType.ASSIGN_MUL -> { left, right -> IrNode.MulNode(left, right) }
-        Token.OperatorType.ASSIGN_DIV -> TODO()
-        Token.OperatorType.ASSIGN_MOD -> TODO()
+        Token.OperatorType.ASSIGN_ADD -> { left, right, sideEffect -> IrNode.AddNode(left, right) to sideEffect }
+        Token.OperatorType.ASSIGN_SUB -> { left, right, sideEffect -> IrNode.SubNode(left, right) to sideEffect }
+        Token.OperatorType.ASSIGN_MUL -> { left, right, sideEffect -> IrNode.MulNode(left, right) to sideEffect }
+        Token.OperatorType.ASSIGN_DIV -> { left, right, sideEffectNode ->
+            val divNode = IrNode.DivNode(left, right, sideEffectNode)
+            divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
+        }
+
+        Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
+            val modNode = IrNode.ModNode(left, right, sideEffectNode)
+            modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
+        }
         else -> error("Unsupported assignment operator: ${assignmentNode.operator.type}")
     }
 
@@ -107,9 +114,9 @@ private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSid
 
     when (val lValue = assignmentNode.lValue) {
         is AstNode.LValueIdentifierNode -> {
-            val newValue = desugar?.invoke(readVariable(lValue.name.name), expressionNode) ?: expressionNode
+            val (newValue, newSideEffectNode2) = desugar?.invoke(readVariable(lValue.name.name), expressionNode, newSideEffectNode) ?: Pair(expressionNode, newSideEffectNode)
             writeVariable(lValue.name.name, newValue)
-            return newValue to newSideEffectNode
+            return newValue to newSideEffectNode2
         }
     }
 }
