@@ -76,7 +76,7 @@ private fun StringBuilder.prefix() {
     appendLine(".intel_syntax noprefix")
     appendLine(".global main")
     appendLine()
-    appendLine("section .text")
+    appendLine(".text")
     appendLine("main:")
     generateInstruction(Instruction.CALL, "mainimpl")
     generateInstruction(Instruction.RET)
