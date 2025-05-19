@@ -31,22 +31,21 @@ private fun IrGraph.linearize(): List<IrNode> {
 
 private fun linearizeNode(node: IrNode): List<IrNode> {
     return when (node) {
-        is IrNode.DivNode, is IrNode.ModNode -> {
-            if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
-                listOf(node)
-            } else {
-                listOf(node) + linearizeNode(node.left) + linearizeNode(node.right)
-            }
-        }
         is IrNode.BinaryOperationNode -> {
             if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
                 listOf(node)
             } else {
-                listOf(node) + linearizeNode(node.left) + linearizeNode(node.right)
+                val left = linearizeNode(node.left)
+                val right = linearizeNode(node.right)
+                if (node in left || node in right) {
+                    left + right
+                } else {
+                    listOf(node) + left + right
+                }
             }
         }
 
-        is IrNode.IntegerConstantNode -> listOf(node)
+        is IrNode.IntegerConstantNode -> listOf()
         is IrNode.NegateNode -> listOf(node) + linearizeNode(node.inNode)
         IrNode.NoOpNode -> listOf()
         is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result)
