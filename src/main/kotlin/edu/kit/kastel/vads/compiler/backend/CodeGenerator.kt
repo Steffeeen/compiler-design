@@ -153,8 +153,16 @@ private fun StringBuilder.generateDiv(node: IrNode.BinaryOperationNode) {
 
 context(registerAllocation: RegisterAllocation<X86Register>)
 private fun StringBuilder.generateNegate(node: IrNode.NegateNode) {
-    generateInstruction(Instruction.MOV, registerAllocation[node].toString(), node.inNode.valueOrRegister())
-    generateInstruction(Instruction.NEG, registerAllocation[node].toString())
+    if (registerAllocation[node] is X86StackRegister && registerAllocation[node.inNode] is X86StackRegister) {
+        // special case as we cannot MOV from memory to memory
+        generateInstruction(Instruction.MOV, X86Registers.ECX.toString(), node.inNode.valueOrRegister())
+        generateInstruction(Instruction.NEG, X86Registers.ECX.toString())
+        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), X86Registers.ECX.toString())
+    } else {
+        // normal case
+        generateInstruction(Instruction.MOV, registerAllocation[node].toString(), node.inNode.valueOrRegister())
+        generateInstruction(Instruction.NEG, registerAllocation[node].toString())
+    }
 }
 
 context(registerAllocation: RegisterAllocation<X86Register>)
