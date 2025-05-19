@@ -106,6 +106,7 @@ private fun assembleOnMac(assembly: String, tempFile: Path, binary: Path) {
         .replace(Regex("^main:", RegexOption.MULTILINE), "_main:")
         .replace(".global main", "global _main")
         .replace(".intel_syntax noprefix", "")
+        .replace("DWORD PTR", "DWORD")
     Files.writeString(tempFile, fixedAssembly)
 
     val objectFile = tempFile.toAbsolutePath().parent.resolve("temp.o")
