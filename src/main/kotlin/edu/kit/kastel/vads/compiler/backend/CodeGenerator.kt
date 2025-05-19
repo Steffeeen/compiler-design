@@ -38,9 +38,9 @@ private fun linearizeNode(node: IrNode): List<IrNode> {
                 val left = linearizeNode(node.left)
                 val right = linearizeNode(node.right)
                 if (node in left || node in right) {
-                    left + right
+                    (left + right).reversed().distinct().reversed()
                 } else {
-                    listOf(node) + left + right
+                    (listOf(node) + left + right).reversed().distinct().reversed()
                 }
             }
         }
