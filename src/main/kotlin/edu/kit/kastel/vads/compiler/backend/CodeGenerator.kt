@@ -24,16 +24,18 @@ fun generateX86Assembly(irGraphs: List<IrGraph>): X86Assembly = X86Assembly(buil
 })
 
 private fun IrGraph.linearize(): List<IrNode> {
-    return linearizeNode(this.returnNode).reversed()
+    val nodes = linearizeNode(this.returnNode).reversed()
+    val sideEffectNodes = linearizeSideEffects(this.returnNode.sideEffect, nodes.toSet()).reversed()
+    return sideEffectNodes + nodes
 }
 
 private fun linearizeNode(node: IrNode): List<IrNode> {
     return when (node) {
         is IrNode.DivNode, is IrNode.ModNode -> {
             if (node.left is IrNode.IntegerConstantNode && node.right is IrNode.IntegerConstantNode) {
-                listOf(node) + linearizeNode(node.sideEffect)
+                listOf(node)
             } else {
-                listOf(node) + linearizeNode(node.left) + linearizeNode(node.right) + linearizeNode(node.sideEffect)
+                listOf(node) + linearizeNode(node.left) + linearizeNode(node.right)
             }
         }
         is IrNode.BinaryOperationNode -> {
@@ -47,10 +49,27 @@ private fun linearizeNode(node: IrNode): List<IrNode> {
         is IrNode.IntegerConstantNode -> listOf(node)
         is IrNode.NegateNode -> listOf(node) + linearizeNode(node.inNode)
         IrNode.NoOpNode -> listOf()
-        is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result) + linearizeNode(node.sideEffect)
+        is IrNode.ReturnNode -> listOf(node) + linearizeNode(node.result)
         is IrNode.SideEffectProjectionNode -> linearizeNode(node.inNode)
         IrNode.StartNode -> listOf()
-    }.distinct()
+    }
+}
+
+private fun linearizeSideEffects(node: IrNode.SideEffectNode, alreadyLinearized: Set<IrNode>): List<IrNode> {
+    return when (node) {
+        is IrNode.SideEffectProjectionNode -> linearizeSideEffects(node.inNode, alreadyLinearized)
+        is IrNode.DivNode, is IrNode.ModNode -> {
+            if (node in alreadyLinearized) {
+                // Continue walking up the side effect chain to find nodes that need to be included
+                linearizeSideEffects(node.sideEffect, alreadyLinearized)
+            } else {
+                // Node has not been included but has a side effect => include it and its dependencies and continue walking up the side effect chain
+                linearizeNode(node) + linearizeSideEffects(node.sideEffect, alreadyLinearized)
+            }
+        }
+
+        IrNode.StartNode -> listOf()
+    }
 }
 
 private fun StringBuilder.prefix() {

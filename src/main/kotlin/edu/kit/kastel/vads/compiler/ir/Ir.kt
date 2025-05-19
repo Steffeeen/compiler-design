@@ -7,11 +7,11 @@ enum class SideEffectType {
 data class IrGraph(val returnNode: IrNode.ReturnNode, val name: String)
 
 sealed interface IrNode {
-    sealed interface SideEffectEmittingNode : IrNode {
+    sealed interface SideEffectNode : IrNode
+
+    sealed interface SideEffectEmittingNode : SideEffectNode {
         val sideEffect: SideEffectNode
     }
-
-    sealed interface SideEffectNode : IrNode
 
     sealed interface BinaryOperationNode : IrNode {
         val left: IrNode
@@ -20,7 +20,7 @@ sealed interface IrNode {
 
     object NoOpNode : IrNode
     object StartNode : IrNode, SideEffectNode
-    data class SideEffectProjectionNode(val type: SideEffectType, val inNode: IrNode) : IrNode, SideEffectNode
+    data class SideEffectProjectionNode(val type: SideEffectType, val inNode: SideEffectNode) : IrNode, SideEffectNode
     data class ReturnNode(val result: IrNode, val sideEffect: SideEffectNode) : IrNode
     data class IntegerConstantNode(val value: Long) : IrNode
     data class AddNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
