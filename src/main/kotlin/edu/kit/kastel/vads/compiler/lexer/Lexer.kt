@@ -6,6 +6,8 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.Span.SimpleSpan
 import edu.kit.kastel.vads.compiler.lexer.Token.*
 
+private val OPERATOR_AND_SEPARATOR_LOOKAHEAD = (OperatorType.entries.map { it.value } + SeparatorType.entries.map { it.value }).maxOf { it.length }
+
 class Lexer(private val source: String, private val options: CompilerOptions) {
     private var pos = 0
     private var lineStart = 0
@@ -33,28 +35,29 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
         if (this.pos >= this.source.length) {
             return null
         }
-        return when (peek()) {
-            '(' -> separator(SeparatorType.PAREN_OPEN)
-            ')' -> separator(SeparatorType.PAREN_CLOSE)
-            '{' -> separator(SeparatorType.BRACE_OPEN)
-            '}' -> separator(SeparatorType.BRACE_CLOSE)
-            ';' -> separator(SeparatorType.SEMICOLON)
-            '-' -> singleOrAssign(OperatorType.SUB, OperatorType.ASSIGN_SUB)
-            '+' -> singleOrAssign(OperatorType.ADD, OperatorType.ASSIGN_ADD)
-            '*' -> singleOrAssign(OperatorType.MUL, OperatorType.ASSIGN_MUL)
-            '/' -> singleOrAssign(OperatorType.DIV, OperatorType.ASSIGN_DIV)
-            '%' -> singleOrAssign(OperatorType.MOD, OperatorType.ASSIGN_MOD)
-            '=' -> Operator(OperatorType.ASSIGN, buildSpan(1))
-            else -> {
-                if (isIdentifierChar(peek())) {
-                    if (isNumeric(peek())) {
-                        return lexNumber()
-                    }
-                    return lexIdentifierOrKeyword()
-                }
-                Error(peek().toString(), buildSpan(1))
+
+        val lookahead = peekMultiple(OPERATOR_AND_SEPARATOR_LOOKAHEAD).trim()
+
+        for (separator in SeparatorType.entries.sortedByDescending { it.value.length }) {
+            if (lookahead.startsWith(separator.value)) {
+                return separator(separator)
             }
         }
+
+        for (operator in OperatorType.entries.sortedByDescending { it.value.length }) {
+            if (lookahead.startsWith(operator.value)) {
+                return Operator(operator, buildSpan(operator.value.length))
+            }
+        }
+
+        if (isIdentifierChar(peek())) {
+            if (isNumeric(peek())) {
+                return lexNumber()
+            }
+            return lexIdentifierOrKeyword()
+        }
+
+        return Error(peek().toString(), buildSpan(1))
     }
 
     enum class CommentType {
@@ -132,7 +135,7 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
     }
 
     private fun separator(parenOpen: SeparatorType): Separator {
-        return Separator(parenOpen, buildSpan(1))
+        return Separator(parenOpen, buildSpan(parenOpen.value.length))
     }
 
     private fun lexIdentifierOrKeyword(): Token {
@@ -176,7 +179,7 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
     private fun isHexPrefix(): Boolean {
         return peek() == '0' && hasMore(1) && (peek(1) == 'x' || peek(1) == 'X')
     }
-    
+
     private fun isIdentifierChar(c: Char): Boolean {
         return c == '_' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
     }
@@ -187,13 +190,6 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
 
     private fun isHex(c: Char): Boolean {
         return isNumeric(c) || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
-    }
-
-    private fun singleOrAssign(single: OperatorType, assign: OperatorType): Token {
-        if (hasMore(1) && peek(1) == '=') {
-            return Operator(assign, buildSpan(2))
-        }
-        return Operator(single, buildSpan(1))
     }
 
     private fun buildSpan(proceed: Int): Span {
@@ -211,4 +207,12 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
     }
 
     private fun peek(offset: Int): Char = source[pos + offset]
+
+    private fun peekMultiple(@Suppress("SameParameterValue") length: Int): String {
+        return if (hasMore(length)) {
+            source.substring(pos, pos + length).takeWhile { !it.isWhitespace() }
+        } else {
+            source.substring(pos)
+        }
+    }
 }
