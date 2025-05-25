@@ -36,7 +36,7 @@ private fun createIrNodeForAstNode(
         is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode)
         is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode)
         is AstNode.LiteralNode -> Pair(createConstantIntegerIrNode(astNode), lastSideEffectNode)
-        is AstNode.NegateNode -> createNegateIrNode(astNode, lastSideEffectNode)
+        is AstNode.UnaryOperationNode -> createNegateIrNode(astNode, lastSideEffectNode)
         is AstNode.AssignmentNode -> handleAssignmentNode(astNode, lastSideEffectNode)
         is AstNode.DeclarationNode -> handleDeclarationNode(astNode, lastSideEffectNode)
         is AstNode.ReturnNode -> createReturnIrNode(astNode, lastSideEffectNode)
@@ -84,10 +84,12 @@ private fun handleIdentifierExpressionNode(identifierAstNode: AstNode.Identifier
 
 context(currentDefinitions: MutableMap<SymbolName, IrNode>)
 private fun createNegateIrNode(
-    negateAstNode: AstNode.NegateNode,
+    unaryOperationNode: AstNode.UnaryOperationNode,
     lastSideEffectNode: IrNode.SideEffectNode
 ): Pair<IrNode, IrNode.SideEffectNode> {
-    val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(negateAstNode.expression, lastSideEffectNode)
+    require(unaryOperationNode.operator.type == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
+
+    val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(unaryOperationNode.expression, lastSideEffectNode)
     return Pair(IrNode.NegateNode(expressionIrNode), newSideEffectNode)
 }
 

@@ -107,7 +107,7 @@ sealed interface AstNode {
         private fun parseHexadecimal(end: Int): Long? {
             return try {
                 value.substring(2, end).toUInt(16).toLong()
-            } catch (e: NumberFormatException) {
+            } catch (_: NumberFormatException) {
                 null
             }
         }
@@ -123,8 +123,8 @@ sealed interface AstNode {
         }
     }
 
-    data class NegateNode(val expression: ExpressionNode, val minusPos: Span) : ExpressionNode {
-        override val span get() = minusPos.merge(expression.span)
+    data class UnaryOperationNode(val expression: ExpressionNode, val operator: Token.Operator) : ExpressionNode {
+        override val span get() = operator.span.merge(expression.span)
 
         override fun <T, R> accept(visitor: Visitor<T?, R?>, data: T?): R? {
             return visitor.visit(this, data)

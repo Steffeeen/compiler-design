@@ -16,7 +16,7 @@ private fun printNode(node: AstNode, depth: Int): String {
         is BinaryOperationNode -> printBinaryOperationNode(node, depth)
         is IdentifierExpressionNode -> printIdentifierExpressionNode(node, depth)
         is LiteralNode -> printLiteralNode(node, depth)
-        is NegateNode -> printNegateNode(node, depth)
+        is UnaryOperationNode -> printUnaryOperationNode(node, depth)
         is LValueIdentifierNode -> printLValueIdentifierNode(node, depth)
         is NameNode -> printNameNode(node, depth)
         is AssignmentNode -> printAssignmentNode(node, depth)
@@ -44,7 +44,7 @@ private fun printFunctionNode(node: FunctionNode, depth: Int): String {
 private fun printBinaryOperationNode(node: BinaryOperationNode, depth: Int): String {
     val lhs = printNode(node.lhs, depth + INDENT)
     val rhs = printNode(node.rhs, depth + INDENT)
-    return "${printNodeNameAndSpan(node, depth)} ${node.operatorType.name}\n$lhs\n$rhs"
+    return "${printNodeNameAndSpan(node, depth)} ${node.operatorType.value}\n$lhs\n$rhs"
 }
 
 private fun printIdentifierExpressionNode(node: IdentifierExpressionNode, depth: Int): String {
@@ -55,8 +55,8 @@ private fun printLiteralNode(node: LiteralNode, depth: Int): String {
     return "${printNodeNameAndSpan(node, depth)} ${node.value}"
 }
 
-private fun printNegateNode(node: NegateNode, depth: Int): String {
-    return "${printNodeNameAndSpan(node, depth)}\n${printNode(node.expression, depth + INDENT)}"
+private fun printUnaryOperationNode(node: UnaryOperationNode, depth: Int): String {
+    return "${printNodeNameAndSpan(node, depth)} ${node.operator.type.value}\n${printNode(node.expression, depth + INDENT)}"
 }
 
 private fun printLValueIdentifierNode(node: LValueIdentifierNode, depth: Int): String {

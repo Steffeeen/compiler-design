@@ -56,8 +56,8 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         return visitor.visit(nameNode, data)
     }
 
-    override fun visit(negateNode: NegateNode, data: T?): R? {
-        return visitInOrderAndAccumulate(negateNode, data, negateNode.expression)
+    override fun visit(unaryOperationNode: UnaryOperationNode, data: T?): R? {
+        return visitInOrderAndAccumulate(unaryOperationNode, data, unaryOperationNode.expression)
     }
 
     override fun visit(programNode: ProgramNode, data: T?): R? {
@@ -102,7 +102,7 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
             is LiteralNode -> visitor.visit(node, accumulatedData)
             is LValueIdentifierNode -> visitor.visit(node, accumulatedData)
             is NameNode -> visitor.visit(node, accumulatedData)
-            is NegateNode -> visitor.visit(node, accumulatedData)
+            is UnaryOperationNode -> visitor.visit(node, accumulatedData)
             is ProgramNode -> visitor.visit(node, accumulatedData)
             is ReturnNode -> visitor.visit(node, accumulatedData)
             is TypeNode -> visitor.visit(node, accumulatedData)

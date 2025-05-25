@@ -43,21 +43,21 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
     }
 
     private fun parseFunction(): FunctionNode {
-        val returnType = expect<Keyword, KeywordType>(KeywordType.INT)
+        val returnType = expectType<KeywordType>(KeywordType.INT)
         val identifier = expect<Identifier>()
 
         if (identifier.value != "main") {
             throw ParseError.FunctionNotNamedMain(identifier.span)
         }
 
-        expect<Separator, SeparatorType>(SeparatorType.PAREN_OPEN)
-        expect<Separator, SeparatorType>(SeparatorType.PAREN_CLOSE)
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
         val body = parseBlock()
         return FunctionNode(TypeNode(IntType, returnType.span), createNameNode(identifier), body)
     }
 
     private fun parseBlock(): BlockNode {
-        val bodyOpen = expect<Separator, SeparatorType>(SeparatorType.BRACE_OPEN)
+        val bodyOpen = expectType<SeparatorType>(SeparatorType.BRACE_OPEN)
         val statements = mutableListOf<StatementNode>()
 
         while (true) {
@@ -70,7 +70,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             }
         }
 
-        val bodyClose = expect<Separator, SeparatorType>(SeparatorType.BRACE_CLOSE)
+        val bodyClose = expectType<SeparatorType>(SeparatorType.BRACE_CLOSE)
 
         return BlockNode(statements, bodyOpen.span.merge(bodyClose.span))
     }
@@ -82,17 +82,17 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             else -> parseSimple()
         }
 
-        expect<Separator, SeparatorType>(SeparatorType.SEMICOLON)
+        expectType<SeparatorType>(SeparatorType.SEMICOLON)
         return statement
     }
 
     private fun parseDeclaration(): StatementNode {
-        val type = expect<Keyword, KeywordType>(KeywordType.INT)
+        val type = expectType<KeywordType>(KeywordType.INT)
         val identifier = expect<Identifier>()
 
         val token = tokenSource.peek()
         val expression = if (token is Operator && token.type == OperatorType.ASSIGN) {
-            expect<Operator, OperatorType>(OperatorType.ASSIGN)
+            expectType<OperatorType>(OperatorType.ASSIGN)
             parseExpression()
         } else {
             null
@@ -138,9 +138,9 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         val token = tokenSource.peek()
 
         if (token is Separator && token.type == SeparatorType.PAREN_OPEN) {
-            expect<Separator, SeparatorType>(SeparatorType.PAREN_OPEN)
+            expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
             val inner = parseLValue()
-            expect<Separator, SeparatorType>(SeparatorType.PAREN_CLOSE)
+            expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
             return inner
         }
 
@@ -149,53 +149,51 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
     }
 
     private fun parseReturn(): StatementNode {
-        val returnToken = expect<Keyword, KeywordType>(KeywordType.RETURN)
+        val returnToken = expectType<KeywordType>(KeywordType.RETURN)
         val expression = parseExpression()
         return ReturnNode(expression, returnToken.span.start)
     }
 
     private fun parseExpression(): ExpressionNode {
-        var lhs = parseTerm()
-
-        while (true) {
-            when (val token = tokenSource.peek()) {
-                is Operator if token.type == OperatorType.ADD || token.type == OperatorType.SUB -> {
-                    tokenSource.consume()
-                    lhs = BinaryOperationNode(lhs, parseTerm(), token.type)
-                }
-
-                else -> return lhs
-            }
-        }
+        return computeExpression(1)
     }
 
-    private fun parseTerm(): ExpressionNode {
-        var lhs = parseFactor()
+    // Precedence climbing
+    private fun computeExpression(minPrecedence: Int): ExpressionNode {
+        var result = computeAtom()
 
         while (true) {
-            when (val token = tokenSource.peek()) {
-                is Operator if token.type == OperatorType.MUL || token.type == OperatorType.DIV || token.type == OperatorType.MOD -> {
-                    tokenSource.consume()
-                    lhs = BinaryOperationNode(lhs, parseFactor(), token.type)
-                }
+            val token = tokenSource.peek() ?: break
 
-                else -> return lhs
+            if (token !is Operator || token.type.precedence < minPrecedence || !token.type.canBeBinary) {
+                break
             }
+
+            val precedence = token.type.precedence
+            val associativity = token.type.associativity
+
+            val nextMinPrecedence = if (associativity == Associativity.LEFT) precedence + 1 else precedence
+
+            tokenSource.consume()
+            val rhs = computeExpression(nextMinPrecedence)
+            result = BinaryOperationNode(result, rhs, token.type)
         }
+
+        return result
     }
 
-    private fun parseFactor(): ExpressionNode {
+    private fun computeAtom(): ExpressionNode {
         return when (val token = tokenSource.peek()) {
             is Separator if token.type == SeparatorType.PAREN_OPEN -> {
                 tokenSource.consume()
-                val expression = parseExpression()
-                expect<Separator, SeparatorType>(SeparatorType.PAREN_CLOSE)
+                val expression = computeExpression(1)
+                expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
                 expression
             }
 
-            is Operator if token.type == OperatorType.SUB -> {
-                val span = tokenSource.consume()!!.span
-                NegateNode(parseFactor(), span)
+            is Operator if token.type.canBeUnary -> {
+                tokenSource.consume()
+                UnaryOperationNode(computeAtom(), token)
             }
 
             is Identifier -> {
@@ -228,8 +226,8 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return token
     }
 
-    private inline fun <reified T : TokenWithType<Type>, Type> expect(type: Type): T {
-        val token = expect<T>()
+    private inline fun <reified T : TokenType> expectType(type: T): TokenWithType<T> {
+        val token = expect<TokenWithType<T>>()
 
         if (token.type != type) {
             throw ParseError.UnexpectedToken(token, token.span)

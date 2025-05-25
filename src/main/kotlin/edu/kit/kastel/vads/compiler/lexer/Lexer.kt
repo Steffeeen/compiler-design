@@ -5,8 +5,13 @@ import edu.kit.kastel.vads.compiler.Position.SimplePosition
 import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.Span.SimpleSpan
 import edu.kit.kastel.vads.compiler.lexer.Token.*
+import kotlin.math.max
 
-private val OPERATOR_AND_SEPARATOR_LOOKAHEAD = (OperatorType.entries.map { it.value } + SeparatorType.entries.map { it.value }).maxOf { it.length }
+private val OPERATOR_AND_SEPARATOR_LOOKAHEAD = run {
+    val operatorLengths = OperatorType.entries.maxOf { it.value.length }
+    val separatorLengths = SeparatorType.entries.maxOf { it.value.length }
+    max(operatorLengths, separatorLengths)
+}
 
 class Lexer(private val source: String, private val options: CompilerOptions) {
     private var pos = 0
@@ -144,10 +149,9 @@ class Lexer(private val source: String, private val options: CompilerOptions) {
             off++
         }
         val id = this.source.substring(this.pos, this.pos + off)
-        // This is a naive solution. Using a better data structure (hashmap, trie) likely performs better.
-        for (value in KeywordType.entries) {
-            if (value.keyword == id) {
-                return Keyword(value, buildSpan(off))
+        for (keyword in KeywordType.entries.sortedByDescending { it.value.length }) {
+            if (keyword.value == id) {
+                return Keyword(keyword, buildSpan(off))
             }
         }
         return Identifier(id, buildSpan(off))
