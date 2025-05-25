@@ -20,13 +20,13 @@ sealed interface IrNode {
 
     object NoOpNode : IrNode
     object StartNode : IrNode, SideEffectNode
-    data class SideEffectProjectionNode(val type: SideEffectType, val inNode: SideEffectNode) : IrNode, SideEffectNode
-    data class ReturnNode(val result: IrNode, val sideEffect: SideEffectNode) : IrNode
-    data class IntegerConstantNode(val value: Long) : IrNode
-    data class AddNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
-    data class SubNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
-    data class MulNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
-    data class DivNode(override val left: IrNode, override val right: IrNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode
-    data class ModNode(override val left: IrNode, override val right: IrNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode
-    data class NegateNode(val inNode: IrNode) : IrNode
+    class SideEffectProjectionNode(val type: SideEffectType, val inNode: SideEffectNode) : IrNode, SideEffectNode
+    class ReturnNode(val result: IrNode, val sideEffect: SideEffectNode) : IrNode
+    class IntegerConstantNode(val value: Long) : IrNode
+    class AddNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
+    class SubNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
+    class MulNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
+    class DivNode(override val left: IrNode, override val right: IrNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode
+    class ModNode(override val left: IrNode, override val right: IrNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode
+    class NegateNode(val inNode: IrNode) : IrNode
 }
