@@ -1,5 +1,12 @@
 package edu.kit.kastel.vads.compiler
 
+import com.github.ajalt.clikt.completion.CompletionCandidates
+import com.github.ajalt.clikt.core.CliktCommand
+import com.github.ajalt.clikt.core.main
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.options.flag
+import com.github.ajalt.clikt.parameters.options.option
+import com.github.ajalt.clikt.parameters.types.path
 import edu.kit.kastel.vads.compiler.backend.X86Assembly
 import edu.kit.kastel.vads.compiler.backend.generateX86Assembly
 import edu.kit.kastel.vads.compiler.ir.buildIr
@@ -14,21 +21,23 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.system.exitProcess
 
-data class CompilerOptions(
-    val printAst: Boolean = false,
-    val printIrToFile: Boolean = false,
-    val printAssembly: Boolean = false,
-)
+fun main(args: Array<String>) = CompilerOptions().main(args)
 
-fun main(args: Array<String>) = with(CompilerOptions()) {
-    if (args.size != 2) {
-        System.err.println("Invalid arguments: Expected one input file and one output file")
-        exitProcess(3)
+class CompilerOptions : CliktCommand() {
+    val printAst by option("--print-ast", envvar = "PRINT_AST", help = "Print the AST").flag(default = false)
+    val printIrToFile by option("--print-ir", envvar = "PRINT_IR", help = "Print the IR to a file").flag(default = false)
+    val printAssembly by option("--print-assembly", envvar = "PRINT_ASSEMBLY", help = "Print the generated assembly").flag(default = false)
+
+    val inputFile by argument("input_file", completionCandidates = CompletionCandidates.Path).path(mustExist = true, canBeFile = true, canBeDir = false)
+    val outputFile by argument("output_file", completionCandidates = CompletionCandidates.Path).path()
+
+    override fun run() {
+        runCompiler()
     }
+}
 
-    val input = Path.of(args[0])
-    val output = Path.of(args[1])
-    val parseResult = lexAndParse(input)
+private fun CompilerOptions.runCompiler() {
+    val parseResult = lexAndParse(inputFile)
 
     if (parseResult is ParseResult.Failure) {
         for (error in parseResult.errors) {
@@ -56,7 +65,7 @@ fun main(args: Array<String>) = with(CompilerOptions()) {
 
     if (printIrToFile) {
         // currently only the main function exists, thus only it gets printed
-        val dotFile = output.toAbsolutePath().parent.resolve("graph.dot")
+        val dotFile = outputFile.toAbsolutePath().parent.resolve("graph.dot")
         if (!Files.exists(dotFile)) {
             Files.writeString(dotFile, irGraphs.find { it.name == "main" }!!.toDotVisualization())
         } else {
@@ -70,7 +79,7 @@ fun main(args: Array<String>) = with(CompilerOptions()) {
         println(assembly.assembly)
     }
 
-    assembly.assembleTo(output)
+    assembly.assembleTo(outputFile)
 }
 
 context(options: CompilerOptions)
