@@ -1,13 +1,14 @@
 package edu.kit.kastel.vads.compiler.semantic
 
 import edu.kit.kastel.vads.compiler.CompilerOptions
+import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 
 sealed interface SemanticError {
     data class InvalidIntegerLiteralRange(val node: AstNode.LiteralNode) : SemanticError
-    data class NoReturnStatement(val node: AstNode.FunctionNode) : SemanticError
+    data class MissingReturnStatement(val node: AstNode.FunctionNode, val span: Span) : SemanticError
     data class VariableAlreadyExists(val node: AstNode.NameNode) : SemanticError
     data class VariableNotDeclaredBeforeAssignment(val node: AstNode.NameNode) : SemanticError
     data class VariableNotInitialized(val node: AstNode.NameNode) : SemanticError
@@ -66,10 +67,29 @@ private object ReturnAnalysis : SemanticAnalysis {
     }
 
     private fun analyzeFunction(functionNode: AstNode.FunctionNode): List<SemanticError> {
-        val hasReturn = functionNode.body.statements.any { it is AstNode.ReturnNode }
-        if (!hasReturn) {
-            return listOf(SemanticError.NoReturnStatement(functionNode))
+        if (hasReturn(functionNode.body.statements)) {
+            return listOf()
         }
-        return listOf()
+        return listOf(SemanticError.MissingReturnStatement(functionNode, functionNode.body.statements.last().span))
+    }
+
+    private fun hasReturn(statements: List<AstNode.StatementNode>): Boolean {
+        for (statement in statements) {
+            if (hasReturn(statement)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun hasReturn(statement: AstNode.StatementNode): Boolean {
+        return when (statement) {
+            is AstNode.ReturnNode -> true
+            is AstNode.BlockNode -> hasReturn(statement.statements)
+            is AstNode.IfNode -> hasReturn(statement.body) &&
+                    statement.elseStatement != null && hasReturn(statement.elseStatement)
+
+            else -> false
+        }
     }
 }
