@@ -31,21 +31,21 @@ private enum class VariableStatus {
 private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus>, MutableList<SemanticError>>> {
     override fun visit(
         assignmentNode: AstNode.AssignmentNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>?
+        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
     ) {
         when (val lValue = assignmentNode.lValue) {
             is AstNode.LValueIdentifierNode -> {
-                val status = data?.first?.get(lValue.name)
+                val status = data.first.get(lValue.name)
 
                 if (assignmentNode.operator.type == Token.OperatorType.ASSIGN) {
-                    checkDeclared(lValue.name, status)?.let { data?.second?.add(it) }
+                    checkDeclared(lValue.name, status)?.let { data.second.add(it) }
                 } else {
-                    checkInitialized(lValue.name, status)?.let { data?.second?.add(it) }
+                    checkInitialized(lValue.name, status)?.let { data.second.add(it) }
                 }
 
                 if (status != VariableStatus.INITIALIZED) {
                     // only update when needed, reassignment is totally fine
-                    updateStatus(data!!.first, VariableStatus.INITIALIZED, lValue.name)?.let { data.second.add(it) }
+                    updateStatus(data.first, VariableStatus.INITIALIZED, lValue.name)?.let { data.second.add(it) }
                 }
             }
         }
@@ -54,22 +54,22 @@ private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus
 
     override fun visit(
         declarationNode: AstNode.DeclarationNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>?
+        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
     ) {
-        checkUndeclared(declarationNode.name, data?.first?.get(declarationNode.name))?.let { data?.second?.add(it) }
+        checkUndeclared(declarationNode.name, data.first.get(declarationNode.name))?.let { data.second.add(it) }
         val status = if (declarationNode.initializer == null) VariableStatus.DECLARED else VariableStatus.INITIALIZED
 
-        updateStatus(data!!.first, status, declarationNode.name)?.let { data.second.add(it) }
+        updateStatus(data.first, status, declarationNode.name)?.let { data.second.add(it) }
 
         return super.visit(declarationNode, data)
     }
 
     override fun visit(
         identifierExpressionNode: AstNode.IdentifierExpressionNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>?
+        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
     ) {
-        val status = data?.first?.get(identifierExpressionNode.name)
-        checkInitialized(identifierExpressionNode.name, status)?.let { data?.second?.add(it) }
+        val status = data.first.get(identifierExpressionNode.name)
+        checkInitialized(identifierExpressionNode.name, status)?.let { data.second.add(it) }
         return super.visit(identifierExpressionNode, data)
     }
 }

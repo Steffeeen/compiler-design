@@ -40,8 +40,8 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
     override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
         val errors = mutableListOf<SemanticError>()
 
-        val visitor = object : NoOpVisitor<Unit?> {
-            override fun visit(literalNode: AstNode.LiteralNode, data: Unit?) {
+        val visitor = object : NoOpVisitor<Unit> {
+            override fun visit(literalNode: AstNode.LiteralNode, data: Unit) {
                 require(literalNode is AstNode.IntLiteralNode) { TODO("Only IntLiteralNode is supported") }
                 if (literalNode.parseValue() != null) {
                     return super.visit(literalNode, data)
@@ -52,7 +52,7 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
             }
         }
 
-        program.accept(RecursivePostorderVisitor(visitor), null)
+        program.accept(RecursivePostorderVisitor(visitor), Unit)
         return errors
     }
 }

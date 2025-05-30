@@ -7,20 +7,20 @@ import edu.kit.kastel.vads.compiler.parser.AstNode.*
  * @param <T> a type for additional data
  * @param <R> a type for a return type
 </R></T> */
-open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>) : Visitor<T?, R?> {
-    override fun visit(assignmentNode: AssignmentNode, data: T?): R? {
+open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R?>) : Visitor<T, R?> {
+    override fun visit(assignmentNode: AssignmentNode, data: T): R? {
         return visitInOrderAndAccumulate(assignmentNode, data, assignmentNode.lValue, assignmentNode.expression)
     }
 
-    override fun visit(binaryOperationNode: BinaryOperationNode, data: T?): R? {
+    override fun visit(binaryOperationNode: BinaryOperationNode, data: T): R? {
         return visitInOrderAndAccumulate(binaryOperationNode, data, binaryOperationNode.lhs, binaryOperationNode.rhs)
     }
 
-    override fun visit(blockNode: BlockNode, data: T?): R? {
+    override fun visit(blockNode: BlockNode, data: T): R? {
         return visitInOrderAndAccumulate(blockNode, data, *blockNode.statements.toTypedArray())
     }
 
-    override fun visit(declarationNode: DeclarationNode, data: T?): R? {
+    override fun visit(declarationNode: DeclarationNode, data: T): R? {
         return visitInOrderAndAccumulate(
             declarationNode,
             data,
@@ -30,7 +30,7 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         )
     }
 
-    override fun visit(functionNode: FunctionNode, data: T?): R? {
+    override fun visit(functionNode: FunctionNode, data: T): R? {
         return visitInOrderAndAccumulate(
             functionNode,
             data,
@@ -40,47 +40,47 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         )
     }
 
-    override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T?): R? {
+    override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T): R? {
         return visitInOrderAndAccumulate(identifierExpressionNode, data, identifierExpressionNode.name)
     }
 
-    override fun visit(literalNode: LiteralNode, data: T?): R? {
+    override fun visit(literalNode: LiteralNode, data: T): R? {
         return visitor.visit(literalNode, data)
     }
 
-    override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T?): R? {
+    override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T): R? {
         return visitInOrderAndAccumulate(lValueIdentifierNode, data, lValueIdentifierNode.name)
     }
 
-    override fun visit(nameNode: NameNode, data: T?): R? {
+    override fun visit(nameNode: NameNode, data: T): R? {
         return visitor.visit(nameNode, data)
     }
 
-    override fun visit(unaryOperationNode: UnaryOperationNode, data: T?): R? {
+    override fun visit(unaryOperationNode: UnaryOperationNode, data: T): R? {
         return visitInOrderAndAccumulate(unaryOperationNode, data, unaryOperationNode.expression)
     }
 
-    override fun visit(programNode: ProgramNode, data: T?): R? {
+    override fun visit(programNode: ProgramNode, data: T): R? {
         return visitInOrderAndAccumulate(programNode, data, *programNode.topLevelFunctions.toTypedArray())
     }
 
-    override fun visit(returnNode: ReturnNode, data: T?): R? {
+    override fun visit(returnNode: ReturnNode, data: T): R? {
         return visitInOrderAndAccumulate(returnNode, data, returnNode.expression)
     }
 
-    override fun visit(typeNode: TypeNode, data: T?): R? {
+    override fun visit(typeNode: TypeNode, data: T): R? {
         return visitor.visit(typeNode, data)
     }
 
-    override fun visit(ifNode: IfNode, data: T?): R? {
+    override fun visit(ifNode: IfNode, data: T): R? {
         return visitInOrderAndAccumulate(ifNode, data, ifNode.condition, ifNode.body, ifNode.elseStatement)
     }
 
-    override fun visit(whileNode: WhileNode, data: T?): R? {
+    override fun visit(whileNode: WhileNode, data: T): R? {
         return visitInOrderAndAccumulate(whileNode, data, whileNode.condition, whileNode.body)
     }
 
-    override fun visit(forNode: ForNode, data: T?): R? {
+    override fun visit(forNode: ForNode, data: T): R? {
         return visitInOrderAndAccumulate(
             forNode,
             data,
@@ -91,11 +91,11 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         )
     }
 
-    override fun visit(breakNode: BreakNode, data: T?): R? = visitor.visit(breakNode, data)
+    override fun visit(breakNode: BreakNode, data: T): R? = visitor.visit(breakNode, data)
 
-    override fun visit(continueNode: ContinueNode, data: T?): R? = visitor.visit(continueNode, data)
+    override fun visit(continueNode: ContinueNode, data: T): R? = visitor.visit(continueNode, data)
 
-    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T?): R? {
+    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T): R? {
         return visitInOrderAndAccumulate(
             ternaryOperationNode, data,
             ternaryOperationNode.condition,
@@ -106,13 +106,13 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
 
     private fun visitInOrderAndAccumulate(
         currentNode: AstNode,
-        data: T?,
+        data: T,
         vararg nodes: AstNode?
     ): R? {
-        var result = nodes.first()?.accept<T?, R?>(this, data)
+        var result = nodes.first()?.accept<T, R?>(this, data)
 
         for (node in nodes.drop(1).filterNotNull()) {
-            result = node.accept<T?, R?>(this, accumulate(data, result))
+            result = node.accept<T, R?>(this, accumulate(data, result))
         }
 
         return visitHelper(currentNode, data, result)
@@ -120,7 +120,7 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
 
     private fun visitHelper(
         node: AstNode,
-        data: T?,
+        data: T,
         result: R?
     ): R? {
         val accumulatedData = accumulate(data, result)
@@ -147,7 +147,7 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         }
     }
 
-    protected fun accumulate(data: T?, value: R?): T? {
+    protected fun accumulate(data: T, value: R?): T {
         return data
     }
 }
