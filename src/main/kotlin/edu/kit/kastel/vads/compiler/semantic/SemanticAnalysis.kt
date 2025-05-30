@@ -12,6 +12,8 @@ sealed interface SemanticError {
     data class VariableAlreadyExists(val node: AstNode.NameNode) : SemanticError
     data class VariableNotDeclaredBeforeAssignment(val node: AstNode.NameNode) : SemanticError
     data class VariableNotInitialized(val node: AstNode.NameNode) : SemanticError
+    data class BreakNotInLoop(val node: AstNode.BreakNode) : SemanticError
+    data class ContinueNotInLoop(val node: AstNode.ContinueNode) : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -22,8 +24,9 @@ context(options: CompilerOptions)
 fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
     val analyses = listOf(
         ReturnAnalysis,
+        BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
-        VariableStatusAnalysis
+        VariableStatusAnalysis,
     )
 
     return analyses.flatMap { it.analyze(program) }
@@ -84,4 +87,32 @@ private object ReturnAnalysis : SemanticAnalysis {
             else -> false
         }
     }
+}
+
+private object BreakAndContinueWithinLoopAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        return program.topLevelFunctions.flatMap { checkBreakNotInLoop(it.body.statements) }
+    }
+
+    private fun checkBreakNotInLoop(statements: List<AstNode>): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+        for (statement in statements) {
+            when (statement) {
+                is AstNode.BreakNode -> errors += SemanticError.BreakNotInLoop(statement)
+                is AstNode.ContinueNode -> errors += SemanticError.ContinueNotInLoop(statement)
+                is AstNode.BlockNode -> errors += checkBreakNotInLoop(statement.statements)
+                is AstNode.IfNode -> {
+                    errors += checkBreakNotInLoop(listOf(statement.body))
+                    if (statement.elseStatement != null) {
+                        errors += checkBreakNotInLoop(listOf(statement.elseStatement))
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        return errors
+    }
+
+
 }
