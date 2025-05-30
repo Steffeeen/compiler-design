@@ -4,7 +4,7 @@ import edu.kit.kastel.vads.compiler.parser.AstNode.*
 
 /** A visitor that does nothing and returns [Unit#INSTANCE] by default.
  * This can be used to implement operations only for specific tree types. */
-interface NoOpVisitor<T> : Visitor<T, Unit?> {
+interface NoOpVisitor<T> : Visitor<T, Unit> {
     override fun visit(assignmentNode: AssignmentNode, data: T) {}
     override fun visit(binaryOperationNode: BinaryOperationNode, data: T) {}
     override fun visit(blockNode: BlockNode, data: T) {}
