@@ -51,9 +51,9 @@ private fun CompilerOptions.runCompiler() {
 
     val result = analyzeProgram(program)
 
-    if (result != null) {
+    if (result.isNotEmpty()) {
         // exit code 7 indicates that the code was rejected by your semantic analysis
-        System.err.println(result)
+        System.err.println(result.joinToString("\n"))
         exitProcess(7)
     }
 
