@@ -46,6 +46,12 @@ private fun createIrNodeForAstNode(
         is AstNode.FunctionNode -> TODO()
         is AstNode.BlockNode -> TODO()
         is AstNode.ProgramNode -> TODO()
+        is AstNode.TernaryOperationNode -> TODO()
+        is AstNode.BreakNode -> TODO()
+        is AstNode.ContinueNode -> TODO()
+        is AstNode.ForNode -> TODO()
+        is AstNode.IfNode -> TODO()
+        is AstNode.WhileNode -> TODO()
     }
 }
 
@@ -138,6 +144,7 @@ private fun handleDeclarationNode(declarationNode: AstNode.DeclarationNode, last
 }
 
 private fun createConstantIntegerIrNode(literalAstNode: AstNode.LiteralNode): IrNode.IntegerConstantNode {
+    require(literalAstNode is AstNode.IntLiteralNode) { TODO("Only integer literals are supported for now") }
     return IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
 }
 

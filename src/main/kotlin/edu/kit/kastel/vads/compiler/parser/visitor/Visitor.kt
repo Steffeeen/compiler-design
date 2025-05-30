@@ -16,4 +16,10 @@ interface Visitor<T, R> {
     fun visit(programNode: ProgramNode, data: T?): R?
     fun visit(returnNode: ReturnNode, data: T?): R?
     fun visit(typeNode: TypeNode, data: T?): R?
+    fun visit(ifNode: IfNode, data: T?): R?
+    fun visit(whileNode: WhileNode, data: T?): R?
+    fun visit(forNode: ForNode, data: T?): R?
+    fun visit(breakNode: BreakNode, data: T?): R?
+    fun visit(continueNode: ContinueNode, data: T?): R?
+    fun visit(ternaryOperationNode: TernaryOperationNode, data: T?): R?
 }

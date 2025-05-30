@@ -8,4 +8,10 @@ sealed interface Type {
             return "int"
         }
     }
+
+    object BoolType : Type {
+        override fun asString(): String {
+            return "bool"
+        }
+    }
 }

@@ -41,6 +41,7 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
 
         val visitor = object : NoOpVisitor<Unit?> {
             override fun visit(literalNode: AstNode.LiteralNode, data: Unit?) {
+                require(literalNode is AstNode.IntLiteralNode) { TODO("Only IntLiteralNode is supported") }
                 if (literalNode.parseValue() != null) {
                     return super.visit(literalNode, data)
                 }

@@ -5,13 +5,13 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.lexer.Token.*
 import edu.kit.kastel.vads.compiler.parser.AstNode.*
-import edu.kit.kastel.vads.compiler.parser.Type.IntType
 
 sealed class ParseError(open val span: Span) : Exception() {
     data class UnexpectedToken(val token: Token, override val span: Span) : ParseError(span)
     data class UnexpectedEndOfFile(override val span: Span) : ParseError(span)
     data class ExpectedEndOfFile(override val span: Span) : ParseError(span)
     data class FunctionNotNamedMain(override val span: Span) : ParseError(span)
+    data class InvalidType(override val span: Span) : ParseError(span)
 }
 
 sealed interface ParseResult {
@@ -33,7 +33,7 @@ fun parse(tokenSource: TokenSource): ParseResult {
 
 private class Parser(private val tokenSource: TokenSource, private val options: CompilerOptions) {
     fun parseProgram(): ProgramNode {
-        val program = ProgramNode(listOf(parseFunction()))
+        val program = ProgramNode(listOf(parseMainFunction()))
 
         if (!tokenSource.hasNoMoreTokens()) {
             throw ParseError.ExpectedEndOfFile(tokenSource.peek()!!.span)
@@ -42,7 +42,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return program
     }
 
-    private fun parseFunction(): FunctionNode {
+    private fun parseMainFunction(): FunctionNode {
         val returnType = expectType<KeywordType>(KeywordType.INT)
         val identifier = expect<Identifier>()
 
@@ -53,7 +53,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
         expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
         val body = parseBlock()
-        return FunctionNode(TypeNode(IntType, returnType.span), createNameNode(identifier), body)
+        return FunctionNode(TypeNode(Type.IntType, returnType.span), createNameNode(identifier), body)
     }
 
     private fun parseBlock(): BlockNode {
@@ -75,19 +75,24 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return BlockNode(statements, bodyOpen.span.merge(bodyClose.span))
     }
 
-    private fun parseStatement(): StatementNode {
-        val statement = when (val token = tokenSource.peek()) {
-            is Keyword if token.type == KeywordType.INT -> parseDeclaration()
-            is Keyword if token.type == KeywordType.RETURN -> parseReturn()
-            else -> parseSimple()
-        }
+    private fun parseType(): TypeNode {
+        return when (val token = tokenSource.peek()) {
+            is Keyword if token.type == KeywordType.INT -> {
+                tokenSource.consume()
+                TypeNode(Type.IntType, token.span)
+            }
 
-        expectType<SeparatorType>(SeparatorType.SEMICOLON)
-        return statement
+            is Keyword if token.type == KeywordType.BOOL -> {
+                tokenSource.consume()
+                TypeNode(Type.BoolType, token.span)
+            }
+
+            else -> throw ParseError.InvalidType(token?.span ?: tokenSource.createEOFSpan())
+        }
     }
 
     private fun parseDeclaration(): StatementNode {
-        val type = expectType<KeywordType>(KeywordType.INT)
+        val type = parseType()
         val identifier = expect<Identifier>()
 
         val token = tokenSource.peek()
@@ -98,39 +103,41 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             null
         }
 
-        return DeclarationNode(TypeNode(IntType, type.span), createNameNode(identifier), expression)
+        return DeclarationNode(type, createNameNode(identifier), expression)
+    }
+
+    private fun parseStatement(): StatementNode {
+        val statement = when (val token = tokenSource.peek()) {
+            is Separator if token.type == SeparatorType.BRACE_OPEN -> parseBlock()
+            is Keyword if token.type in setOf(KeywordType.IF, KeywordType.WHILE, KeywordType.FOR, KeywordType.CONTINUE, KeywordType.BREAK, KeywordType.RETURN) -> parseControl()
+            else -> {
+                val statement = parseSimple()
+                expectType<SeparatorType>(SeparatorType.SEMICOLON)
+                statement
+            }
+        }
+
+        return statement
     }
 
     private fun parseSimple(): StatementNode {
-        val lValue = parseLValue()
-        val assignmentOperator = parseAssignmentOperator()
-        val expression = parseExpression()
-        return AssignmentNode(lValue, assignmentOperator, expression)
+        return when (val token = tokenSource.peek()) {
+            is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseDeclaration()
+            else -> {
+                val lValue = parseLValue()
+                val assignmentOperator = parseAssignmentOperator()
+                val expression = parseExpression()
+                AssignmentNode(lValue, assignmentOperator, expression)
+            }
+        }
     }
 
-    private fun parseAssignmentOperator(): Operator {
-        val token = tokenSource.peek()
-
-        if (token == null) {
-            throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
-        }
-
-        if (token !is Operator) {
-            throw ParseError.UnexpectedToken(token, token.span)
-        }
-
-        return when (token.type) {
-            OperatorType.ASSIGN,
-            OperatorType.ASSIGN_DIV,
-            OperatorType.ASSIGN_SUB,
-            OperatorType.ASSIGN_MOD,
-            OperatorType.ASSIGN_MUL,
-            OperatorType.ASSIGN_ADD -> {
-                tokenSource.consume()
-                token
-            }
-
-            else -> throw ParseError.UnexpectedToken(token, token.span)
+    private fun parseSimpleOptional(): StatementNode? {
+        return when (val token = tokenSource.peek()) {
+            is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseSimple()
+            is Separator if token.type == SeparatorType.PAREN_OPEN -> parseSimple()
+            is Identifier -> parseSimple()
+            else -> null
         }
     }
 
@@ -148,10 +155,118 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return LValueIdentifierNode(createNameNode(identifier))
     }
 
-    private fun parseReturn(): StatementNode {
+    private fun parseElseOptional(): StatementNode? {
+        when (val token = tokenSource.peek()) {
+            is Keyword if token.type == KeywordType.ELSE -> {
+                tokenSource.consume()
+                return parseStatement()
+            }
+
+            else -> return null
+        }
+    }
+
+    private fun parseControl(): StatementNode {
+        val token = tokenSource.peek()
+
+        if (token !is Keyword) {
+            unexpectedToken(token)
+        }
+
+        return when (token.type) {
+            KeywordType.IF -> parseIfStatement()
+            KeywordType.WHILE -> parseWhileStatement()
+            KeywordType.FOR -> parseForStatement()
+            KeywordType.CONTINUE -> parseContinueStatement()
+            KeywordType.BREAK -> parseBreakStatement()
+            KeywordType.RETURN -> parseReturnStatement()
+            else -> unexpectedToken(token)
+        }
+    }
+
+    private fun parseIfStatement(): StatementNode {
+        val ifToken = expectType<KeywordType>(KeywordType.IF)
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        val condition = parseExpression()
+        expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
+        val body = parseStatement()
+        val elseStatement = parseElseOptional()
+        return IfNode(condition, body, elseStatement, ifToken.span.merge(elseStatement?.span ?: body.span))
+    }
+
+    private fun parseWhileStatement(): StatementNode {
+        val whileToken = expectType<KeywordType>(KeywordType.WHILE)
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        val condition = parseExpression()
+        expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
+        val body = parseStatement()
+        return WhileNode(condition, body, whileToken.span.merge(body.span))
+    }
+
+    private fun parseForStatement(): StatementNode {
+        val forToken = expectType<KeywordType>(KeywordType.FOR)
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+
+        val initializer = parseSimpleOptional()
+        expectType(SeparatorType.SEMICOLON)
+        val condition = parseExpression()
+        expectType(SeparatorType.SEMICOLON)
+        val increment = parseSimpleOptional()
+
+        expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
+        val body = parseStatement()
+
+        return ForNode(initializer, condition, increment, body, forToken.span.merge(body.span))
+    }
+
+    private fun parseContinueStatement(): StatementNode {
+        val continueToken = expectType<KeywordType>(KeywordType.CONTINUE)
+        expectType(SeparatorType.SEMICOLON)
+        return ContinueNode(continueToken.span)
+    }
+
+    private fun parseBreakStatement(): StatementNode {
+        val breakToken = expectType<KeywordType>(KeywordType.BREAK)
+        expectType(SeparatorType.SEMICOLON)
+        return BreakNode(breakToken.span)
+    }
+
+    private fun parseReturnStatement(): StatementNode {
         val returnToken = expectType<KeywordType>(KeywordType.RETURN)
         val expression = parseExpression()
+        expectType(SeparatorType.SEMICOLON)
         return ReturnNode(expression, returnToken.span.start)
+    }
+
+    private fun parseAssignmentOperator(): Operator {
+        val token = tokenSource.peek()
+
+        if (token == null) {
+            throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
+        }
+
+        if (token !is Operator) {
+            throw ParseError.UnexpectedToken(token, token.span)
+        }
+
+        return when (token.type) {
+            OperatorType.ASSIGN,
+            OperatorType.ASSIGN_ADD,
+            OperatorType.ASSIGN_SUB,
+            OperatorType.ASSIGN_MUL,
+            OperatorType.ASSIGN_DIV,
+            OperatorType.ASSIGN_MOD,
+            OperatorType.ASSIGN_BITWISE_AND,
+            OperatorType.ASSIGN_BITWISE_XOR,
+            OperatorType.ASSIGN_BITWISE_OR,
+            OperatorType.ASSIGN_LEFT_SHIFT,
+            OperatorType.ASSIGN_RIGHT_SHIFT -> {
+                tokenSource.consume()
+                token
+            }
+
+            else -> throw ParseError.UnexpectedToken(token, token.span)
+        }
     }
 
     private fun parseExpression(): ExpressionNode {
@@ -164,6 +279,15 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
 
         while (true) {
             val token = tokenSource.peek() ?: break
+
+            if (token is Operator && token.type == OperatorType.TERNARY) {
+                tokenSource.consume()
+                val trueBranch = computeExpression(OperatorType.TERNARY.precedence + 1)
+                expectType(SeparatorType.COLON)
+                val falseBranch = computeExpression(OperatorType.TERNARY.precedence)
+                result = TernaryOperationNode(result, trueBranch, falseBranch)
+                continue
+            }
 
             if (token !is Operator || token.type.precedence < minPrecedence || !token.type.canBeBinary) {
                 break
@@ -201,25 +325,33 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
                 IdentifierExpressionNode(createNameNode(token))
             }
 
-            is NumberLiteral -> {
+            is Keyword if token.type == KeywordType.TRUE || token.type == KeywordType.FALSE -> {
                 tokenSource.consume()
-                LiteralNode(token.value, token.base, token.span)
+                val value = token.type == KeywordType.TRUE
+                BooleanLiteralNode(value, token.span)
             }
 
-            null -> throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
-            else -> throw ParseError.UnexpectedToken(token, token.span)
+            is NumberLiteral -> {
+                tokenSource.consume()
+                IntLiteralNode(token.value, token.base, token.span)
+            }
+
+            else -> unexpectedToken(token)
         }
+    }
+
+    private fun unexpectedToken(token: Token?): Nothing {
+        if (token == null) {
+            throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
+        }
+        throw ParseError.UnexpectedToken(token, token.span)
     }
 
     private inline fun <reified T : Token> expect(): T {
         val token = tokenSource.peek()
 
-        if (token == null) {
-            throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
-        }
-
         if (token !is T) {
-            throw ParseError.UnexpectedToken(token, token.span)
+            unexpectedToken(token)
         }
 
         tokenSource.consume()

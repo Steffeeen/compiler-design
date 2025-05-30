@@ -24,6 +24,12 @@ private fun printNode(node: AstNode, depth: Int): String {
         is DeclarationNode -> printDeclarationNode(node, depth)
         is ReturnNode -> printReturnNode(node, depth)
         is TypeNode -> printTypeNode(node, depth)
+        is TernaryOperationNode -> printTernaryOperationNode(node, depth)
+        is BreakNode -> printBreakNode(node, depth)
+        is ContinueNode -> printContinueNode(node, depth)
+        is ForNode -> printForNode(node, depth)
+        is IfNode -> printIfNode(node, depth)
+        is WhileNode -> printWhileNode(node, depth)
     }
 }
 
@@ -52,7 +58,11 @@ private fun printIdentifierExpressionNode(node: IdentifierExpressionNode, depth:
 }
 
 private fun printLiteralNode(node: LiteralNode, depth: Int): String {
-    return "${printNodeNameAndSpan(node, depth)} ${node.value}"
+    val value = when (node) {
+        is BooleanLiteralNode -> node.value.toString()
+        is IntLiteralNode -> node.value
+    }
+    return "${printNodeNameAndSpan(node, depth)} $value"
 }
 
 private fun printUnaryOperationNode(node: UnaryOperationNode, depth: Int): String {
@@ -95,6 +105,42 @@ private fun printReturnNode(node: ReturnNode, depth: Int): String {
 
 private fun printTypeNode(node: TypeNode, depth: Int): String {
     return "${printNodeNameAndSpan(node, depth)} ${node.type.asString()}"
+}
+
+private fun printTernaryOperationNode(node: TernaryOperationNode, depth: Int): String {
+    val condition = printNode(node.condition, depth + INDENT)
+    val trueBranch = printNode(node.trueExpression, depth + INDENT)
+    val falseBranch = printNode(node.falseExpression, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$condition\n$trueBranch\n$falseBranch"
+}
+
+private fun printBreakNode(node: BreakNode, depth: Int): String {
+    return printNodeNameAndSpan(node, depth)
+}
+
+private fun printContinueNode(node: ContinueNode, depth: Int): String {
+    return printNodeNameAndSpan(node, depth)
+}
+
+private fun printForNode(node: ForNode, depth: Int): String {
+    val init = node.initializer?.let { printNode(it, depth + INDENT) } ?: "no initializer"
+    val condition = printNode(node.condition, depth + INDENT)
+    val update = node.increment?.let { printNode(it, depth + INDENT) } ?: "no update"
+    val body = printNode(node.body, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$init\n$condition\n$update\n$body"
+}
+
+private fun printIfNode(node: IfNode, depth: Int): String {
+    val condition = printNode(node.condition, depth + INDENT)
+    val thenBranch = printNode(node.body, depth + INDENT)
+    val elseBranch = node.elseStatement?.let { printNode(it, depth + INDENT) } ?: "no else branch"
+    return "${printNodeNameAndSpan(node, depth)}\n$condition\n$thenBranch\n$elseBranch"
+}
+
+private fun printWhileNode(node: WhileNode, depth: Int): String {
+    val condition = printNode(node.condition, depth + INDENT)
+    val body = printNode(node.body, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$condition\n$body"
 }
 
 private fun printNodeNameAndSpan(node: AstNode, depth: Int): String {

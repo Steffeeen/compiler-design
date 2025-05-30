@@ -18,4 +18,10 @@ interface NoOpVisitor<T> : Visitor<T?, Unit?> {
     override fun visit(programNode: ProgramNode, data: T?) {}
     override fun visit(returnNode: ReturnNode, data: T?) {}
     override fun visit(typeNode: TypeNode, data: T?) {}
+    override fun visit(ifNode: IfNode, data: T?) {}
+    override fun visit(whileNode: WhileNode, data: T?) {}
+    override fun visit(forNode: ForNode, data: T?) {}
+    override fun visit(breakNode: BreakNode, data: T?) {}
+    override fun visit(continueNode: ContinueNode, data: T?) {}
+    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T?) {}
 }

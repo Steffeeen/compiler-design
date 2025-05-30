@@ -72,6 +72,38 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
         return visitor.visit(typeNode, data)
     }
 
+    override fun visit(ifNode: IfNode, data: T?): R? {
+        return visitInOrderAndAccumulate(ifNode, data, ifNode.condition, ifNode.body, ifNode.elseStatement)
+    }
+
+    override fun visit(whileNode: WhileNode, data: T?): R? {
+        return visitInOrderAndAccumulate(whileNode, data, whileNode.condition, whileNode.body)
+    }
+
+    override fun visit(forNode: ForNode, data: T?): R? {
+        return visitInOrderAndAccumulate(
+            forNode,
+            data,
+            forNode.initializer,
+            forNode.condition,
+            forNode.increment,
+            forNode.body
+        )
+    }
+
+    override fun visit(breakNode: BreakNode, data: T?): R? = visitor.visit(breakNode, data)
+
+    override fun visit(continueNode: ContinueNode, data: T?): R? = visitor.visit(continueNode, data)
+
+    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T?): R? {
+        return visitInOrderAndAccumulate(
+            ternaryOperationNode, data,
+            ternaryOperationNode.condition,
+            ternaryOperationNode.trueExpression,
+            ternaryOperationNode.falseExpression
+        )
+    }
+
     private fun visitInOrderAndAccumulate(
         currentNode: AstNode,
         data: T?,
@@ -106,6 +138,12 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T?, R?>)
             is ProgramNode -> visitor.visit(node, accumulatedData)
             is ReturnNode -> visitor.visit(node, accumulatedData)
             is TypeNode -> visitor.visit(node, accumulatedData)
+            is IfNode -> visitor.visit(node, accumulatedData)
+            is WhileNode -> visitor.visit(node, accumulatedData)
+            is ForNode -> visitor.visit(node, accumulatedData)
+            is BreakNode -> visitor.visit(node, accumulatedData)
+            is ContinueNode -> visitor.visit(node, accumulatedData)
+            is TernaryOperationNode -> visitor.visit(node, accumulatedData)
         }
     }
 
