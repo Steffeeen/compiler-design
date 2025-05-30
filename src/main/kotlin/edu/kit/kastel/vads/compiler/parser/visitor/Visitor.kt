@@ -10,6 +10,8 @@ interface Visitor<T, R> {
     fun visit(functionNode: FunctionNode, data: T): R
     fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T): R
     fun visit(literalNode: LiteralNode, data: T): R
+    fun visit(literalNode: IntLiteralNode, data: T): R = visit(literalNode, data)
+    fun visit(literalNode: BooleanLiteralNode, data: T): R = visit(literalNode, data)
     fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T): R
     fun visit(nameNode: NameNode, data: T): R
     fun visit(unaryOperationNode: UnaryOperationNode, data: T): R
