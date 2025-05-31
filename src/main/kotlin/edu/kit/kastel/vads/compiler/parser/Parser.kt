@@ -5,6 +5,7 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.lexer.Token.*
 import edu.kit.kastel.vads.compiler.parser.AstNode.*
+import edu.kit.kastel.vads.compiler.typechecker.Type
 
 sealed class ParseError(open val span: Span) : Exception() {
     data class UnexpectedToken(val token: Token, override val span: Span) : ParseError(span)

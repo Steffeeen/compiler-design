@@ -4,6 +4,7 @@ import edu.kit.kastel.vads.compiler.Position
 import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor
+import edu.kit.kastel.vads.compiler.typechecker.Type
 
 sealed interface AstNode {
     val span: Span

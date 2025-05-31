@@ -1,0 +1,44 @@
+package edu.kit.kastel.vads.compiler.parser.visitor
+
+import edu.kit.kastel.vads.compiler.parser.AstNode.*
+
+abstract class VisitorWithoutData : Visitor<Unit, Unit> {
+    final override fun visit(assignmentNode: AssignmentNode, data: Unit) = visit(assignmentNode)
+    open fun visit(assignmentNode: AssignmentNode) {}
+    final override fun visit(binaryOperationNode: BinaryOperationNode, data: Unit) = visit(binaryOperationNode)
+    open fun visit(binaryOperationNode: BinaryOperationNode) {}
+    final override fun visit(blockNode: BlockNode, data: Unit) = visit(blockNode)
+    open fun visit(blockNode: BlockNode) {}
+    final override fun visit(declarationNode: DeclarationNode, data: Unit) = visit(declarationNode)
+    open fun visit(declarationNode: DeclarationNode) {}
+    final override fun visit(functionNode: FunctionNode, data: Unit) = visit(functionNode)
+    open fun visit(functionNode: FunctionNode) {}
+    final override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: Unit) = visit(identifierExpressionNode)
+    open fun visit(identifierExpressionNode: IdentifierExpressionNode) {}
+    final override fun visit(literalNode: LiteralNode, data: Unit) = visit(literalNode)
+    open fun visit(literalNode: LiteralNode) {}
+    final override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: Unit) = visit(lValueIdentifierNode)
+    open fun visit(lValueIdentifierNode: LValueIdentifierNode) {}
+    final override fun visit(nameNode: NameNode, data: Unit) = visit(nameNode)
+    open fun visit(nameNode: NameNode) {}
+    final override fun visit(unaryOperationNode: UnaryOperationNode, data: Unit) = visit(unaryOperationNode)
+    open fun visit(unaryOperationNode: UnaryOperationNode) {}
+    final override fun visit(programNode: ProgramNode, data: Unit) = visit(programNode)
+    open fun visit(programNode: ProgramNode) {}
+    final override fun visit(returnNode: ReturnNode, data: Unit) = visit(returnNode)
+    open fun visit(returnNode: ReturnNode) {}
+    final override fun visit(typeNode: TypeNode, data: Unit) = visit(typeNode)
+    open fun visit(typeNode: TypeNode) {}
+    final override fun visit(ifNode: IfNode, data: Unit) = visit(ifNode)
+    open fun visit(ifNode: IfNode) {}
+    final override fun visit(whileNode: WhileNode, data: Unit) = visit(whileNode)
+    open fun visit(whileNode: WhileNode) {}
+    final override fun visit(forNode: ForNode, data: Unit) = visit(forNode)
+    open fun visit(forNode: ForNode) {}
+    final override fun visit(breakNode: BreakNode, data: Unit) = visit(breakNode)
+    open fun visit(breakNode: BreakNode) {}
+    final override fun visit(continueNode: ContinueNode, data: Unit) = visit(continueNode)
+    open fun visit(continueNode: ContinueNode) {}
+    final override fun visit(ternaryOperationNode: TernaryOperationNode, data: Unit) = visit(ternaryOperationNode)
+    open fun visit(ternaryOperationNode: TernaryOperationNode) {}
+}

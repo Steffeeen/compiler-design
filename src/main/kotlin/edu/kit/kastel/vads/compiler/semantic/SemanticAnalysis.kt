@@ -5,6 +5,8 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
+import edu.kit.kastel.vads.compiler.typechecker.TypeChecking
+import edu.kit.kastel.vads.compiler.typechecker.TypeError
 
 sealed interface SemanticError {
     data class InvalidIntegerLiteralRange(val node: AstNode.LiteralNode) : SemanticError
@@ -14,6 +16,7 @@ sealed interface SemanticError {
     data class VariableNotInitialized(val node: AstNode.NameNode) : SemanticError
     data class BreakNotInLoop(val node: AstNode.BreakNode) : SemanticError
     data class ContinueNotInLoop(val node: AstNode.ContinueNode) : SemanticError
+    data class TypeErrorWrapper(val error: TypeError) : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -27,6 +30,7 @@ fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
         BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
         VariableStatusAnalysis,
+        TypeChecking,
     )
 
     return analyses.flatMap { it.analyze(program) }

@@ -1,4 +1,4 @@
-package edu.kit.kastel.vads.compiler.parser
+package edu.kit.kastel.vads.compiler.typechecker
 
 sealed interface Type {
     fun asString(): String
