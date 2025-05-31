@@ -93,7 +93,7 @@ private fun createNegateIrNode(
     unaryOperationNode: AstNode.UnaryOperationNode,
     lastSideEffectNode: IrNode.SideEffectNode
 ): Pair<IrNode, IrNode.SideEffectNode> {
-    require(unaryOperationNode.operator.type == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
+    require(unaryOperationNode.operator == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
 
     val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(unaryOperationNode.expression, lastSideEffectNode)
     return Pair(IrNode.NegateNode(expressionIrNode), newSideEffectNode)
@@ -101,7 +101,7 @@ private fun createNegateIrNode(
 
 context(currentDefinitions: MutableMap<SymbolName, IrNode>)
 private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode, IrNode.SideEffectNode> {
-    val desugar: ((IrNode, IrNode, IrNode.SideEffectNode) -> Pair<IrNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator.type) {
+    val desugar: ((IrNode, IrNode, IrNode.SideEffectNode) -> Pair<IrNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator) {
         Token.OperatorType.ASSIGN -> null
         Token.OperatorType.ASSIGN_ADD -> { left, right, sideEffect -> IrNode.AddNode(left, right) to sideEffect }
         Token.OperatorType.ASSIGN_SUB -> { left, right, sideEffect -> IrNode.SubNode(left, right) to sideEffect }
@@ -115,7 +115,7 @@ private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSid
             val modNode = IrNode.ModNode(left, right, sideEffectNode)
             modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
         }
-        else -> error("Unsupported assignment operator: ${assignmentNode.operator.type}")
+        else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
     }
 
     val (expressionNode, newSideEffectNode) = createIrNodeForAstNode(assignmentNode.expression, lastSideEffectNode)

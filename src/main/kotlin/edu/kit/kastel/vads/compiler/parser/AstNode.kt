@@ -20,7 +20,7 @@ sealed interface AstNode {
 
     data class AssignmentNode(
         val lValue: LValueNode,
-        val operator: Token.Operator,
+        val operator: Token.OperatorType.AssignOperatorType,
         val expression: ExpressionNode
     ) : StatementNode {
 
@@ -31,7 +31,7 @@ sealed interface AstNode {
     data class BinaryOperationNode(
         val lhs: ExpressionNode,
         val rhs: ExpressionNode,
-        val operatorType: Token.OperatorType
+        val operatorType: Token.OperatorType.BinaryOperatorType
     ) :
         ExpressionNode {
 
@@ -109,9 +109,7 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class UnaryOperationNode(val expression: ExpressionNode, val operator: Token.Operator) : ExpressionNode {
-        override val span get() = operator.span.merge(expression.span)
-
+    data class UnaryOperationNode(val expression: ExpressionNode, val operator: Token.OperatorType.UnaryOperatorType, override val span: Span) : ExpressionNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 

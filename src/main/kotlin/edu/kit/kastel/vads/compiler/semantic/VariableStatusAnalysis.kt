@@ -37,7 +37,7 @@ private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus
             is AstNode.LValueIdentifierNode -> {
                 val status = data.first.get(lValue.name)
 
-                if (assignmentNode.operator.type == Token.OperatorType.ASSIGN) {
+                if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
                     checkDeclared(lValue.name, status)?.let { data.second.add(it) }
                 } else {
                     checkInitialized(lValue.name, status)?.let { data.second.add(it) }

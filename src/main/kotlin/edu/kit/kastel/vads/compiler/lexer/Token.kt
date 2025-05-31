@@ -5,6 +5,7 @@ package edu.kit.kastel.vads.compiler.lexer
 import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.lexer.Token.Associativity.LEFT
 import edu.kit.kastel.vads.compiler.lexer.Token.Associativity.RIGHT
+import kotlin.reflect.KClass
 
 sealed interface Token {
     val span: Span
@@ -60,7 +61,7 @@ sealed interface Token {
 
         companion object {
             val entries by lazy {
-                KeywordTypeImpl::class.sealedSubclasses.mapNotNull { it.objectInstance }
+                KeywordType::class.getAllSealedSubclasses().mapNotNull { it.objectInstance }
             }
         }
     }
@@ -79,7 +80,7 @@ sealed interface Token {
 
         companion object {
             val entries by lazy {
-                SeparatorTypeImpl::class.sealedSubclasses.mapNotNull { it.objectInstance }
+                SeparatorType::class.getAllSealedSubclasses().mapNotNull { it.objectInstance }
             }
         }
     }
@@ -91,59 +92,108 @@ sealed interface Token {
     }
 
     sealed interface OperatorType : TokenType {
-        val precedence: Int
-        val associativity: Associativity
-        val canBeUnary: Boolean
-        val canBeBinary: Boolean
+        sealed interface UnaryOperatorType : OperatorType {
+            val unaryPrecedence: Int
+            val unaryAssociativity: Associativity
+        }
 
-        sealed class OperatorTypeImpl(
+        sealed class UnaryOperatorTypeImpl(
             override val value: String,
-            override val precedence: Int,
-            override val associativity: Associativity,
-            override val canBeUnary: Boolean = false,
-            override val canBeBinary: Boolean = true,
-        ) : OperatorType
+            override val unaryPrecedence: Int,
+            override val unaryAssociativity: Associativity,
+        ) : UnaryOperatorType
 
-        object LOGICAL_NOT : OperatorTypeImpl("!", 13, RIGHT, canBeUnary = true, canBeBinary = false)
-        object BITWISE_NOT : OperatorTypeImpl("~", 13, RIGHT, canBeUnary = true, canBeBinary = false)
-        object MUL : OperatorTypeImpl("*", 12, LEFT)
-        object DIV : OperatorTypeImpl("/", 12, LEFT)
-        object MOD : OperatorTypeImpl("%", 12, LEFT)
-        object ADD : OperatorTypeImpl("+", 11, LEFT)
-        object SUB : OperatorTypeImpl("-", 11, LEFT, canBeUnary = true, canBeBinary = true)
-        object LEFT_SHIFT : OperatorTypeImpl("<<", 10, LEFT)
-        object RIGHT_SHIFT : OperatorTypeImpl(">>", 10, LEFT)
-        object LESS_THAN : OperatorTypeImpl("<", 9, LEFT)
-        object LESS_EQUAL : OperatorTypeImpl("<=", 9, LEFT)
-        object GREATER_THAN : OperatorTypeImpl(">", 9, LEFT)
-        object GREATER_EQUAL : OperatorTypeImpl(">=", 9, LEFT)
-        object EQUAL : OperatorTypeImpl("==", 8, LEFT)
-        object NOT_EQUAL : OperatorTypeImpl("!=", 8, LEFT)
-        object BITWISE_AND : OperatorTypeImpl("&", 7, LEFT)
-        object BITWISE_XOR : OperatorTypeImpl("^", 6, LEFT)
-        object BITWISE_OR : OperatorTypeImpl("|", 5, LEFT)
-        object LOGICAL_AND : OperatorTypeImpl("&&", 4, LEFT)
-        object LOGICAL_OR : OperatorTypeImpl("||", 3, LEFT)
-        object TERNARY : OperatorTypeImpl("?", 2, RIGHT, canBeBinary = false)
-        object ASSIGN : OperatorTypeImpl("=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_ADD : OperatorTypeImpl("+=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_SUB : OperatorTypeImpl("-=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_MUL : OperatorTypeImpl("*=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_DIV : OperatorTypeImpl("/=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_MOD : OperatorTypeImpl("%=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_BITWISE_AND : OperatorTypeImpl("&=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_BITWISE_XOR : OperatorTypeImpl("^=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_BITWISE_OR : OperatorTypeImpl("|=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_LEFT_SHIFT : OperatorTypeImpl("<<=", 1, RIGHT, canBeBinary = false)
-        object ASSIGN_RIGHT_SHIFT : OperatorTypeImpl(">>=", 1, RIGHT, canBeBinary = false)
+        sealed interface BinaryOperatorType : OperatorType {
+            val binaryPrecedence: Int
+            val binaryAssociativity: Associativity
+        }
+
+        sealed class BinaryOperatorTypeImpl(
+            override val value: String,
+            override val binaryPrecedence: Int,
+            override val binaryAssociativity: Associativity,
+        ) : BinaryOperatorType
+
+        sealed interface AssignOperatorType : BinaryOperatorType
+
+        sealed class AssignOperatorTypeImpl(
+            override val value: String,
+            override val binaryPrecedence: Int,
+            override val binaryAssociativity: Associativity,
+        ) : AssignOperatorType
+
+        sealed interface TernaryOperatorType : OperatorType {
+            val ternaryPrecedence: Int
+            val ternaryAssociativity: Associativity
+        }
+
+        sealed class TernaryOperatorTypeImpl(
+            override val value: String,
+            override val ternaryPrecedence: Int,
+            override val ternaryAssociativity: Associativity,
+        ) : TernaryOperatorType
+
+        object LOGICAL_NOT : UnaryOperatorTypeImpl("!", 13, RIGHT)
+        object BITWISE_NOT : UnaryOperatorTypeImpl("~", 13, RIGHT)
+        object MUL : BinaryOperatorTypeImpl("*", 12, LEFT)
+        object DIV : BinaryOperatorTypeImpl("/", 12, LEFT)
+        object MOD : BinaryOperatorTypeImpl("%", 12, LEFT)
+        object ADD : BinaryOperatorTypeImpl("+", 11, LEFT)
+        object SUB : UnaryOperatorType, BinaryOperatorType {
+            override val value = "-"
+            override val unaryPrecedence = 13
+            override val unaryAssociativity = RIGHT
+            override val binaryPrecedence = 11
+            override val binaryAssociativity = LEFT
+        }
+
+        object LEFT_SHIFT : BinaryOperatorTypeImpl("<<", 10, LEFT)
+        object RIGHT_SHIFT : BinaryOperatorTypeImpl(">>", 10, LEFT)
+        object LESS_THAN : BinaryOperatorTypeImpl("<", 9, LEFT)
+        object LESS_EQUAL : BinaryOperatorTypeImpl("<=", 9, LEFT)
+        object GREATER_THAN : BinaryOperatorTypeImpl(">", 9, LEFT)
+        object GREATER_EQUAL : BinaryOperatorTypeImpl(">=", 9, LEFT)
+        object EQUAL : BinaryOperatorTypeImpl("==", 8, LEFT)
+        object NOT_EQUAL : BinaryOperatorTypeImpl("!=", 8, LEFT)
+        object BITWISE_AND : BinaryOperatorTypeImpl("&", 7, LEFT)
+        object BITWISE_XOR : BinaryOperatorTypeImpl("^", 6, LEFT)
+        object BITWISE_OR : BinaryOperatorTypeImpl("|", 5, LEFT)
+        object LOGICAL_AND : BinaryOperatorTypeImpl("&&", 4, LEFT)
+        object LOGICAL_OR : BinaryOperatorTypeImpl("||", 3, LEFT)
+        object TERNARY : TernaryOperatorTypeImpl("?", 2, RIGHT)
+        object ASSIGN : AssignOperatorTypeImpl("=", 1, RIGHT)
+        object ASSIGN_ADD : AssignOperatorTypeImpl("+=", 1, RIGHT)
+        object ASSIGN_SUB : AssignOperatorTypeImpl("-=", 1, RIGHT)
+        object ASSIGN_MUL : AssignOperatorTypeImpl("*=", 1, RIGHT)
+        object ASSIGN_DIV : AssignOperatorTypeImpl("/=", 1, RIGHT)
+        object ASSIGN_MOD : AssignOperatorTypeImpl("%=", 1, RIGHT)
+        object ASSIGN_BITWISE_AND : AssignOperatorTypeImpl("&=", 1, RIGHT)
+        object ASSIGN_BITWISE_XOR : AssignOperatorTypeImpl("^=", 1, RIGHT)
+        object ASSIGN_BITWISE_OR : AssignOperatorTypeImpl("|=", 1, RIGHT)
+        object ASSIGN_LEFT_SHIFT : AssignOperatorTypeImpl("<<=", 1, RIGHT)
+        object ASSIGN_RIGHT_SHIFT : AssignOperatorTypeImpl(">>=", 1, RIGHT)
 
         companion object {
             val entries by lazy {
-                OperatorTypeImpl::class.sealedSubclasses.mapNotNull { it.objectInstance }
+                OperatorType::class.getAllSealedSubclasses().mapNotNull { it.objectInstance }
             }
         }
     }
 
     data class Operator(override val type: OperatorType, override val span: Span) : TokenWithType<OperatorType>
 
+}
+
+private fun <T : Any> KClass<T>.getAllSealedSubclasses(): Set<KClass<out T>> {
+    val result = mutableSetOf<KClass<out T>>()
+
+    fun collectSubclasses(klass: KClass<out T>) {
+        klass.sealedSubclasses.forEach { subclass ->
+            result.add(subclass)
+            collectSubclasses(subclass)
+        }
+    }
+
+    collectSubclasses(this)
+    return result
 }

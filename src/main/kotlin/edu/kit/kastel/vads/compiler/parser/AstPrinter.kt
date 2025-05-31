@@ -66,7 +66,7 @@ private fun printLiteralNode(node: LiteralNode, depth: Int): String {
 }
 
 private fun printUnaryOperationNode(node: UnaryOperationNode, depth: Int): String {
-    return "${printNodeNameAndSpan(node, depth)} ${node.operator.type.value}\n${printNode(node.expression, depth + INDENT)}"
+    return "${printNodeNameAndSpan(node, depth)} ${node.operator.value}\n${printNode(node.expression, depth + INDENT)}"
 }
 
 private fun printLValueIdentifierNode(node: LValueIdentifierNode, depth: Int): String {

@@ -125,9 +125,9 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseDeclaration()
             else -> {
                 val lValue = parseLValue()
-                val assignmentOperator = parseAssignmentOperator()
+                val assignmentOperatorType = parseAssignmentOperator()
                 val expression = parseExpression()
-                AssignmentNode(lValue, assignmentOperator, expression)
+                AssignmentNode(lValue, assignmentOperatorType, expression)
             }
         }
     }
@@ -238,7 +238,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return ReturnNode(expression, returnToken.span.start)
     }
 
-    private fun parseAssignmentOperator(): Operator {
+    private fun parseAssignmentOperator(): OperatorType.AssignOperatorType {
         val token = tokenSource.peek()
 
         if (token == null) {
@@ -249,24 +249,12 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             throw ParseError.UnexpectedToken(token, token.span)
         }
 
-        return when (token.type) {
-            OperatorType.ASSIGN,
-            OperatorType.ASSIGN_ADD,
-            OperatorType.ASSIGN_SUB,
-            OperatorType.ASSIGN_MUL,
-            OperatorType.ASSIGN_DIV,
-            OperatorType.ASSIGN_MOD,
-            OperatorType.ASSIGN_BITWISE_AND,
-            OperatorType.ASSIGN_BITWISE_XOR,
-            OperatorType.ASSIGN_BITWISE_OR,
-            OperatorType.ASSIGN_LEFT_SHIFT,
-            OperatorType.ASSIGN_RIGHT_SHIFT -> {
-                tokenSource.consume()
-                token
-            }
-
-            else -> throw ParseError.UnexpectedToken(token, token.span)
+        if (token.type !is OperatorType.AssignOperatorType) {
+            throw ParseError.UnexpectedToken(token, token.span)
         }
+
+        tokenSource.consume()
+        return token.type
     }
 
     private fun parseExpression(): ExpressionNode {
@@ -282,19 +270,19 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
 
             if (token is Operator && token.type == OperatorType.TERNARY) {
                 tokenSource.consume()
-                val trueBranch = computeExpression(OperatorType.TERNARY.precedence + 1)
+                val trueBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence + 1)
                 expectType(SeparatorType.COLON)
-                val falseBranch = computeExpression(OperatorType.TERNARY.precedence)
+                val falseBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence)
                 result = TernaryOperationNode(result, trueBranch, falseBranch)
                 continue
             }
 
-            if (token !is Operator || token.type.precedence < minPrecedence || !token.type.canBeBinary) {
+            if (token !is Operator || token.type is OperatorType.AssignOperatorType || token.type !is OperatorType.BinaryOperatorType || token.type.binaryPrecedence < minPrecedence) {
                 break
             }
 
-            val precedence = token.type.precedence
-            val associativity = token.type.associativity
+            val precedence = token.type.binaryPrecedence
+            val associativity = token.type.binaryAssociativity
 
             val nextMinPrecedence = if (associativity == Associativity.LEFT) precedence + 1 else precedence
 
@@ -315,9 +303,10 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
                 expression
             }
 
-            is Operator if token.type.canBeUnary -> {
+            is Operator if token.type is OperatorType.UnaryOperatorType -> {
                 tokenSource.consume()
-                UnaryOperationNode(computeAtom(), token)
+                val atom = computeAtom()
+                UnaryOperationNode(atom, token.type, token.span.merge(atom.span))
             }
 
             is Identifier -> {
