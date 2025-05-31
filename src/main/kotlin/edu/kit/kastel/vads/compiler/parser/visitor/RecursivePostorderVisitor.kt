@@ -109,21 +109,24 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
         data: T,
         vararg nodes: AstNode?
     ): R {
+        val filteredNodes = nodes.filterNotNull()
+        if (filteredNodes.isEmpty()) {
+            return visitHelper(currentNode, data)
+        }
         var result = nodes.filterNotNull().first().accept<T, R>(this, data)
 
         for (node in nodes.drop(1).filterNotNull()) {
             result = node.accept<T, R>(this, accumulate(data, result))
         }
 
-        return visitHelper(currentNode, data, result)
+        return visitHelper(currentNode, data)
     }
 
     private fun visitHelper(
         node: AstNode,
-        data: T,
-        result: R
+        data: T
     ): R {
-        val accumulatedData = accumulate(data, result)
+        val accumulatedData = data
         return when (node) {
             is AssignmentNode -> visitor.visit(node, accumulatedData)
             is BinaryOperationNode -> visitor.visit(node, accumulatedData)
