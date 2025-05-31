@@ -268,7 +268,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         while (true) {
             val token = tokenSource.peek() ?: break
 
-            if (token is Operator && token.type == OperatorType.TERNARY) {
+            if (token is Operator && token.type == OperatorType.TERNARY && OperatorType.TERNARY.ternaryPrecedence >= minPrecedence) {
                 tokenSource.consume()
                 val trueBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence + 1)
                 expectType(SeparatorType.COLON)
