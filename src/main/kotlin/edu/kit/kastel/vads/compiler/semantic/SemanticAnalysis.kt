@@ -16,6 +16,7 @@ sealed interface SemanticError {
     data class VariableNotInitialized(val node: AstNode.NameNode) : SemanticError
     data class BreakNotInLoop(val node: AstNode.BreakNode) : SemanticError
     data class ContinueNotInLoop(val node: AstNode.ContinueNode) : SemanticError
+    data class DeclarationInForIncrement(val node: AstNode.DeclarationNode) : SemanticError
     data class TypeErrorWrapper(val error: TypeError) : SemanticError
 }
 
@@ -29,6 +30,7 @@ fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
         ReturnAnalysis,
         BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
+        NoDeclarationInForIncrementAnalysis,
         VariableStatusAnalysis,
         TypeChecking,
     )
@@ -90,6 +92,24 @@ private object ReturnAnalysis : SemanticAnalysis {
 
             else -> false
         }
+    }
+}
+
+private object NoDeclarationInForIncrementAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+
+        program.accept(RecursivePostorderVisitor(object : NoOpVisitor<Unit> {
+            override fun visit(forNode: AstNode.ForNode, data: Unit) {
+                if (forNode.increment is AstNode.DeclarationNode) {
+                    errors += SemanticError.DeclarationInForIncrement(forNode.increment)
+                }
+
+                super.visit(forNode, data)
+            }
+        }), Unit)
+
+        return errors
     }
 }
 
