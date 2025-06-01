@@ -35,7 +35,14 @@ fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
         TypeChecking,
     )
 
-    return analyses.flatMap { it.analyze(program) }
+    for (analysis in analyses) {
+        val errors = analysis.analyze(program)
+        if (errors.isNotEmpty()) {
+            return errors
+        }
+    }
+
+    return listOf()
 }
 
 private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
