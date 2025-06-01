@@ -5,6 +5,7 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.visitor.Visitor
 import edu.kit.kastel.vads.compiler.typechecker.Type
+import kotlin.math.pow
 
 sealed interface AstNode {
     val span: Span
@@ -21,24 +22,13 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class AssignmentNode(
-        val lValue: LValueNode,
-        val operator: Token.OperatorType.AssignOperatorType,
-        val expression: ExpressionNode
-    ) : SimpleNode {
-
+    data class AssignmentNode(val lValue: LValueNode, val operator: Token.OperatorType.AssignOperatorType, val expression: ExpressionNode) : SimpleNode {
         override val span get() = lValue.span.merge(expression.span)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class BinaryOperationNode(
-        val lhs: ExpressionNode,
-        val rhs: ExpressionNode,
-        val operatorType: Token.OperatorType.BinaryOperatorType
-    ) :
-        ExpressionNode {
-
-        override val span get() = lhs.span.merge(rhs.span)
+    data class BinaryOperationNode(val left: ExpressionNode, val right: ExpressionNode, val operatorType: Token.OperatorType.BinaryOperatorType) : ExpressionNode {
+        override val span get() = left.span.merge(right.span)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
@@ -53,54 +43,35 @@ sealed interface AstNode {
 
     data class FunctionNode(val returnType: TypeNode, val name: NameNode, val body: BlockNode) : AstNode {
         override val span get() = Span.SimpleSpan(returnType.span.start, body.span.end)
-
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
     data class IdentifierExpressionNode(val name: NameNode) : ExpressionNode {
         override val span get() = name.span
-
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    sealed class LiteralNode(val type: Type) : ExpressionNode {
-        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
-    }
+    sealed class LiteralNode(val type: Type) : ExpressionNode
 
     data class IntLiteralNode(val value: String, val base: Int, override val span: Span) : LiteralNode(Type.IntType) {
-        fun parseValue(): Long? {
-            return when (base) {
-                10 -> parseDecimal(value.length)
-                16 -> parseHexadecimal(value.length)
-                else -> error("Unsupported base $base")
-            }
-        }
-
-        private fun parseDecimal(end: Int): Long? {
-            val l: Long
-            try {
-                l = value.substring(0, end).toLong(10)
-            } catch (_: NumberFormatException) {
-                return null
-            }
-
-            if (l < 0 || l > Integer.toUnsignedLong(Integer.MIN_VALUE)) {
-                return null
-            }
-
-            return l
-        }
-
-        private fun parseHexadecimal(end: Int): Long? {
+        fun parseValue(): UInt? {
             return try {
-                value.substring(2, end).toUInt(16).toLong()
+                when (base) {
+                    10 -> value.toUInt(10).takeIf { it <= 2.0.pow(31).toUInt() }
+                    16 -> value.substring(2).toUInt(16)
+                    else -> error("Unsupported base $base")
+                }
             } catch (_: NumberFormatException) {
                 null
             }
         }
+
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class BooleanLiteralNode(val value: Boolean, override val span: Span) : LiteralNode(Type.BoolType)
+    data class BooleanLiteralNode(val value: Boolean, override val span: Span) : LiteralNode(Type.BoolType) {
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
 
     sealed interface LValueNode : AstNode
 

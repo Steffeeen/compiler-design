@@ -73,18 +73,18 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
     }
 
     override fun visit(binaryOperationNode: AstNode.BinaryOperationNode) {
-        val leftType = typeCheck(binaryOperationNode.lhs)
-        val rightType = typeCheck(binaryOperationNode.rhs)
+        val leftType = typeCheck(binaryOperationNode.left)
+        val rightType = typeCheck(binaryOperationNode.right)
 
         if (binaryOperationNode.operatorType == Token.OperatorType.EQUAL || binaryOperationNode.operatorType == Token.OperatorType.NOT_EQUAL) {
-            compareTypes(binaryOperationNode.lhs, leftType, binaryOperationNode.rhs, rightType)
+            compareTypes(binaryOperationNode.left, leftType, binaryOperationNode.right, rightType)
             typeCache[binaryOperationNode] = Type.BoolType
             return
         }
 
         val (expectedLeftType, expectedRightType, resultType) = binaryOperationNode.operatorType.expectedType()
-        compareTypes(expectedLeftType, leftType, binaryOperationNode.lhs)
-        compareTypes(expectedRightType, rightType, binaryOperationNode.rhs)
+        compareTypes(expectedLeftType, leftType, binaryOperationNode.left)
+        compareTypes(expectedRightType, rightType, binaryOperationNode.right)
 
         typeCache[binaryOperationNode] = resultType
     }

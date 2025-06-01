@@ -15,8 +15,10 @@ abstract class VisitorWithoutData : Visitor<Unit, Unit> {
     open fun visit(functionNode: FunctionNode) {}
     final override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: Unit) = visit(identifierExpressionNode)
     open fun visit(identifierExpressionNode: IdentifierExpressionNode) {}
-    final override fun visit(literalNode: LiteralNode, data: Unit) = visit(literalNode)
-    open fun visit(literalNode: LiteralNode) {}
+    final override fun visit(intLiteralNode: IntLiteralNode, data: Unit) = visit(intLiteralNode)
+    open fun visit(intLiteralNode: IntLiteralNode) {}
+    final override fun visit(booleanLiteralNode: BooleanLiteralNode, data: Unit) = visit(booleanLiteralNode)
+    open fun visit(booleanLiteralNode: BooleanLiteralNode) {}
     final override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: Unit) = visit(lValueIdentifierNode)
     open fun visit(lValueIdentifierNode: LValueIdentifierNode) {}
     final override fun visit(nameNode: NameNode, data: Unit) = visit(nameNode)

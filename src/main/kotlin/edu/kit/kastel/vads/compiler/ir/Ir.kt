@@ -22,7 +22,7 @@ sealed interface IrNode {
     object StartNode : IrNode, SideEffectNode
     class SideEffectProjectionNode(val type: SideEffectType, val inNode: SideEffectNode) : IrNode, SideEffectNode
     class ReturnNode(val result: IrNode, val sideEffect: SideEffectNode) : IrNode
-    class IntegerConstantNode(val value: Long) : IrNode
+    class IntegerConstantNode(val value: UInt) : IrNode
     class AddNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
     class SubNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode
     class MulNode(override val left: IrNode, override val right: IrNode) : BinaryOperationNode

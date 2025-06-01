@@ -13,7 +13,7 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
     }
 
     override fun visit(binaryOperationNode: BinaryOperationNode, data: T): R {
-        return visitInOrderAndAccumulate(binaryOperationNode, data, binaryOperationNode.lhs, binaryOperationNode.rhs)
+        return visitInOrderAndAccumulate(binaryOperationNode, data, binaryOperationNode.left, binaryOperationNode.right)
     }
 
     override fun visit(blockNode: BlockNode, data: T): R {
@@ -44,8 +44,12 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
         return visitInOrderAndAccumulate(identifierExpressionNode, data, identifierExpressionNode.name)
     }
 
-    override fun visit(literalNode: LiteralNode, data: T): R {
-        return visitor.visit(literalNode, data)
+    override fun visit(intLiteralNode: IntLiteralNode, data: T): R {
+        return visitor.visit(intLiteralNode, data)
+    }
+
+    override fun visit(booleanLiteralNode: BooleanLiteralNode, data: T): R {
+        return visitor.visit(booleanLiteralNode, data)
     }
 
     override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T): R {
@@ -113,10 +117,10 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
         if (filteredNodes.isEmpty()) {
             return visitHelper(currentNode, data)
         }
-        var result = nodes.filterNotNull().first().accept<T, R>(this, data)
+        var result = filteredNodes.first().accept<T, R>(this, data)
 
-        for (node in nodes.drop(1).filterNotNull()) {
-            result = node.accept<T, R>(this, accumulate(data, result))
+        for (node in filteredNodes.drop(1)) {
+            result = node.accept(this, accumulate(data, result))
         }
 
         return visitHelper(currentNode, data)
@@ -134,7 +138,8 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
             is DeclarationNode -> visitor.visit(node, accumulatedData)
             is FunctionNode -> visitor.visit(node, accumulatedData)
             is IdentifierExpressionNode -> visitor.visit(node, accumulatedData)
-            is LiteralNode -> visitor.visit(node, accumulatedData)
+            is IntLiteralNode -> visitor.visit(node, accumulatedData)
+            is BooleanLiteralNode -> visitor.visit(node, accumulatedData)
             is LValueIdentifierNode -> visitor.visit(node, accumulatedData)
             is NameNode -> visitor.visit(node, accumulatedData)
             is UnaryOperationNode -> visitor.visit(node, accumulatedData)

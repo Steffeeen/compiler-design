@@ -60,8 +60,8 @@ private fun createBinaryOperationIrNode(
     binaryOperationAstNode: AstNode.BinaryOperationNode,
     lastSideEffectNode: IrNode.SideEffectNode
 ): Pair<IrNode, IrNode.SideEffectNode> {
-    val (leftIrNode, newSideEffectNode) = createIrNodeForAstNode(binaryOperationAstNode.lhs, lastSideEffectNode)
-    val (rightIrNode, newSideEffectNode2) = createIrNodeForAstNode(binaryOperationAstNode.rhs, newSideEffectNode)
+    val (leftIrNode, newSideEffectNode) = createIrNodeForAstNode(binaryOperationAstNode.left, lastSideEffectNode)
+    val (rightIrNode, newSideEffectNode2) = createIrNodeForAstNode(binaryOperationAstNode.right, newSideEffectNode)
 
     return when (binaryOperationAstNode.operatorType) {
         Token.OperatorType.ADD -> IrNode.AddNode(leftIrNode, rightIrNode) to newSideEffectNode2

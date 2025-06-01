@@ -48,8 +48,8 @@ private fun printFunctionNode(node: FunctionNode, depth: Int): String {
 }
 
 private fun printBinaryOperationNode(node: BinaryOperationNode, depth: Int): String {
-    val lhs = printNode(node.lhs, depth + INDENT)
-    val rhs = printNode(node.rhs, depth + INDENT)
+    val lhs = printNode(node.left, depth + INDENT)
+    val rhs = printNode(node.right, depth + INDENT)
     return "${printNodeNameAndSpan(node, depth)} ${node.operatorType.value}\n$lhs\n$rhs"
 }
 

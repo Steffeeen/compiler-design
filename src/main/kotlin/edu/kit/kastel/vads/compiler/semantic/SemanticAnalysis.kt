@@ -52,11 +52,10 @@ private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
         val visitor = object : NoOpVisitor<Unit> {
             override fun visit(literalNode: AstNode.IntLiteralNode, data: Unit) {
                 if (literalNode.parseValue() != null) {
-                    return super.visit(literalNode, data)
+                    return
                 }
 
                 errors += SemanticError.InvalidIntegerLiteralRange(literalNode)
-                return super.visit(literalNode, data)
             }
         }
 
@@ -111,8 +110,6 @@ private object NoDeclarationInForIncrementAnalysis : SemanticAnalysis {
                 if (forNode.increment is AstNode.DeclarationNode) {
                     errors += SemanticError.DeclarationInForIncrement(forNode.increment)
                 }
-
-                super.visit(forNode, data)
             }
         }), Unit)
 

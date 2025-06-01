@@ -11,7 +11,8 @@ interface NoOpVisitor<T> : Visitor<T, Unit> {
     override fun visit(declarationNode: DeclarationNode, data: T) {}
     override fun visit(functionNode: FunctionNode, data: T) {}
     override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T) {}
-    override fun visit(literalNode: LiteralNode, data: T) {}
+    override fun visit(intLiteralNode: IntLiteralNode, data: T) {}
+    override fun visit(booleanLiteralNode: BooleanLiteralNode, data: T) {}
     override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T) {}
     override fun visit(nameNode: NameNode, data: T) {}
     override fun visit(unaryOperationNode: UnaryOperationNode, data: T) {}

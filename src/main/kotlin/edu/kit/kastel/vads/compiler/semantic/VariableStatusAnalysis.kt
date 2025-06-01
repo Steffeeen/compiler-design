@@ -38,8 +38,8 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     override fun visit(unaryOperationNode: AstNode.UnaryOperationNode) = unaryOperationNode.expression.accept(this, Unit)
     override fun visit(returnNode: AstNode.ReturnNode) = returnNode.expression.accept(this, Unit)
     override fun visit(binaryOperationNode: AstNode.BinaryOperationNode) {
-        binaryOperationNode.lhs.accept(this, Unit)
-        binaryOperationNode.rhs.accept(this, Unit)
+        binaryOperationNode.left.accept(this, Unit)
+        binaryOperationNode.right.accept(this, Unit)
     }
 
     override fun visit(ternaryOperationNode: AstNode.TernaryOperationNode) {
