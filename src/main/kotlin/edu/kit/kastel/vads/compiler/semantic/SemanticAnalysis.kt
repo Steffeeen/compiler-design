@@ -77,7 +77,9 @@ private object ReturnAnalysis : SemanticAnalysis {
         if (hasReturn(functionNode.body.statements)) {
             return listOf()
         }
-        return listOf(SemanticError.MissingReturnStatement(functionNode, functionNode.body.statements.last().span))
+        val span = functionNode.body.statements.lastOrNull()?.span
+            ?: functionNode.body.span // Fallback to the body span if no statements are present
+        return listOf(SemanticError.MissingReturnStatement(functionNode, span))
     }
 
     private fun hasReturn(statements: List<AstNode.StatementNode>): Boolean {
