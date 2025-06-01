@@ -14,11 +14,23 @@ class Namespace<T> {
         content[name.name] = value
     }
 
+    fun put(name: SymbolName, value: T) {
+        content[name] = value
+    }
+
     fun get(name: AstNode.NameNode): T? {
         return content[name.name]
     }
 
+    fun get(name: SymbolName): T? {
+        return content[name]
+    }
+
     operator fun contains(name: AstNode.NameNode): Boolean {
         return content.containsKey(name.name)
+    }
+
+    fun getAll(): Map<SymbolName, T> {
+        return content
     }
 }

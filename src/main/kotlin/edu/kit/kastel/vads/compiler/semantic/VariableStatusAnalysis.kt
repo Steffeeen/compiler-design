@@ -2,8 +2,8 @@ package edu.kit.kastel.vads.compiler.semantic
 
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
-import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
-import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
+import edu.kit.kastel.vads.compiler.parser.SymbolName
+import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
 
 /** Checks that variables are
  * - declared before assignment
@@ -13,9 +13,9 @@ import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 
 object VariableStatusAnalysis : SemanticAnalysis {
     override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
-        val errors = mutableListOf<SemanticError>()
-        program.accept(RecursivePostorderVisitor(VariableStatusVisitor), Pair(Namespace(), errors))
-        return errors
+        val visitor = VariableStatusVisitor()
+        program.accept(visitor, Unit)
+        return visitor.errors
     }
 }
 
@@ -28,78 +28,201 @@ private enum class VariableStatus {
     }
 }
 
-private object VariableStatusVisitor : NoOpVisitor<Pair<Namespace<VariableStatus>, MutableList<SemanticError>>> {
-    override fun visit(
-        assignmentNode: AstNode.AssignmentNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
-    ) {
-        when (val lValue = assignmentNode.lValue) {
-            is AstNode.LValueIdentifierNode -> {
-                val status = data.first.get(lValue.name)
+private class VariableStatusVisitor : VisitorWithoutData() {
+    val errors = mutableListOf<SemanticError>()
+    private val statusStack = StatusStack()
+    private val blockToNamespace = mutableMapOf<AstNode.BlockNode, Namespace<VariableStatus>>()
 
-                if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
-                    checkDeclared(lValue.name, status)?.let { data.second.add(it) }
-                } else {
-                    checkInitialized(lValue.name, status)?.let { data.second.add(it) }
+    override fun visit(programNode: AstNode.ProgramNode) = programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
+    override fun visit(functionNode: AstNode.FunctionNode) = functionNode.body.accept(this, Unit)
+    override fun visit(unaryOperationNode: AstNode.UnaryOperationNode) = unaryOperationNode.expression.accept(this, Unit)
+    override fun visit(returnNode: AstNode.ReturnNode) = returnNode.expression.accept(this, Unit)
+    override fun visit(binaryOperationNode: AstNode.BinaryOperationNode) {
+        binaryOperationNode.lhs.accept(this, Unit)
+        binaryOperationNode.rhs.accept(this, Unit)
+    }
+
+    override fun visit(ternaryOperationNode: AstNode.TernaryOperationNode) {
+        ternaryOperationNode.condition.accept(this, Unit)
+        ternaryOperationNode.trueExpression.accept(this, Unit)
+        ternaryOperationNode.falseExpression.accept(this, Unit)
+    }
+
+    override fun visit(whileNode: AstNode.WhileNode) {
+        whileNode.condition.accept(this, Unit)
+        whileNode.body.accept(this, Unit)
+    }
+
+    override fun visit(forNode: AstNode.ForNode) {
+        fun doAnalysis() {
+            forNode.initializer?.accept(this, Unit)
+            forNode.condition.accept(this, Unit)
+
+            // Analyze the body before the increment to ensure that if a variable is initialized in the increment, it is not considered initialized in the body
+            forNode.body.accept(this, Unit)
+
+            forNode.increment?.accept(this, Unit)
+        }
+
+        if (forNode.initializer is AstNode.DeclarationNode) {
+            // The initializer declares a new variable, so we create a new namespace for the for loop to avoid leaking the loop variable into the outer namespace
+            createNamespace { doAnalysis() }
+        } else {
+            // There is no initializer or
+            // the initializer is an assignment to an existing variable, so we can just update the status in the current namespace
+            doAnalysis()
+        }
+    }
+
+    override fun visit(blockNode: AstNode.BlockNode) {
+        blockToNamespace[blockNode] = createNamespace {
+            for (statement in blockNode.statements) {
+                statement.accept(this, Unit)
+
+                if (statement is AstNode.ReturnNode || statement is AstNode.BreakNode || statement is AstNode.ContinueNode) {
+                    // After a control flow node we assume that all variables that were declared before the control flow node
+                    // are initialized regardless of whether they were actually initialized in the block or not
+                    statusStack.getAll().forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
                 }
 
-                if (status != VariableStatus.INITIALIZED) {
-                    // only update when needed, reassignment is totally fine
-                    updateStatus(data.first, VariableStatus.INITIALIZED, lValue.name)?.let { data.second.add(it) }
+                if (statement is AstNode.BlockNode) {
+                    // transfer the status of variables that were initialized in the inner block to the outer block
+                    val blockNamespace = blockToNamespace[statement]!!
+                    val variablesToTransferToOuterBlock = blockNamespace.getAll().filter { (name, status) ->
+                        status == VariableStatus.INITIALIZED && statusStack.getStatus(name) == VariableStatus.DECLARED
+                    }
+                    variablesToTransferToOuterBlock.forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
                 }
             }
         }
-        return super.visit(assignmentNode, data)
     }
 
-    override fun visit(
-        declarationNode: AstNode.DeclarationNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
-    ) {
-        checkUndeclared(declarationNode.name, data.first.get(declarationNode.name))?.let { data.second.add(it) }
+    override fun visit(declarationNode: AstNode.DeclarationNode) {
+        declarationNode.initializer?.accept(this, Unit)
+
+        checkUndeclared(declarationNode.name)
         val status = if (declarationNode.initializer == null) VariableStatus.DECLARED else VariableStatus.INITIALIZED
-
-        updateStatus(data.first, status, declarationNode.name)?.let { data.second.add(it) }
-
-        return super.visit(declarationNode, data)
+        updateStatus(declarationNode.name, status)
     }
 
-    override fun visit(
-        identifierExpressionNode: AstNode.IdentifierExpressionNode,
-        data: Pair<Namespace<VariableStatus>, MutableList<SemanticError>>
-    ) {
-        val status = data.first.get(identifierExpressionNode.name)
-        checkInitialized(identifierExpressionNode.name, status)?.let { data.second.add(it) }
-        return super.visit(identifierExpressionNode, data)
+    override fun visit(assignmentNode: AstNode.AssignmentNode) {
+        require(assignmentNode.lValue is AstNode.LValueIdentifierNode) { TODO("Currently only identifier lValues are supported") }
+
+        assignmentNode.expression.accept(this, Unit)
+
+        if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
+            checkDeclared(assignmentNode.lValue.name)
+        } else {
+            checkInitialized(assignmentNode.lValue.name)
+        }
+
+        updateStatus(assignmentNode.lValue.name, VariableStatus.INITIALIZED)
+    }
+
+    override fun visit(identifierExpressionNode: AstNode.IdentifierExpressionNode) {
+        checkInitialized(identifierExpressionNode.name)
+    }
+
+    override fun visit(ifNode: AstNode.IfNode) {
+        ifNode.condition.accept(this, Unit)
+
+        // Analyze the body and else statement in separate namespaces to avoid the case where it is only a variable declaration that would leak into the outer namespace
+        createNamespace { ifNode.body.accept(this, Unit) }
+        createNamespace { ifNode.elseStatement?.accept(this, Unit) }
+
+        if (ifNode.elseStatement != null) {
+            // Ensure that variables initialized in both branches are marked as initialized in the outer namespace
+            val bodyNamespace = getNamespaceForBlockOrSingleStatement(ifNode.body)
+            val elseNamespace = getNamespaceForBlockOrSingleStatement(ifNode.elseStatement)
+            val variablesDeclaredBeforeIfStatement = statusStack.getAll().filterValues { it == VariableStatus.DECLARED }.keys
+            val initializedInBody = bodyNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in variablesDeclaredBeforeIfStatement }.keys
+            val initializedInBoth = elseNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in initializedInBody }.keys
+            initializedInBoth.forEach { statusStack.updateStatus(it, VariableStatus.INITIALIZED) }
+        }
+    }
+
+    private fun getNamespaceForBlockOrSingleStatement(statement: AstNode.StatementNode): Namespace<VariableStatus> = when (statement) {
+        is AstNode.BlockNode -> blockToNamespace[statement]!!
+        is AstNode.ReturnNode, is AstNode.BreakNode, is AstNode.ContinueNode -> {
+            // All variables after a control flow node are considered to be initialized
+            createNamespace {
+                statusStack.getAll().forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
+            }
+        }
+
+        else -> {
+            // For single statements, we create a new namespace and just rerun the analysis, this is technically not optimal but doesn't really matter for single statements
+            createNamespace {
+                statement.accept(this, Unit)
+            }
+        }
+    }
+
+    private fun updateStatus(name: AstNode.NameNode, status: VariableStatus) {
+        val currentStatus = statusStack.getStatus(name)
+        if (currentStatus == null || currentStatus == VariableStatus.DECLARED && status == VariableStatus.INITIALIZED) {
+            statusStack.updateStatus(name, status)
+            return
+        }
+
+        if (currentStatus == VariableStatus.INITIALIZED && status == VariableStatus.INITIALIZED) {
+            return
+        }
+
+        errors += SemanticError.VariableAlreadyExists(name)
+    }
+
+    private fun checkInitialized(name: AstNode.NameNode) {
+        val status = statusStack.getStatus(name)
+        if (status == null || status == VariableStatus.DECLARED) {
+            errors += SemanticError.VariableNotInitialized(name)
+        }
+    }
+
+    private fun checkDeclared(name: AstNode.NameNode) {
+        val status = statusStack.getStatus(name)
+        if (status == null) {
+            errors += SemanticError.VariableNotDeclaredBeforeAssignment(name)
+        }
+    }
+
+    private fun checkUndeclared(name: AstNode.NameNode) {
+        val status = statusStack.getStatus(name)
+        if (status != null) {
+            errors += SemanticError.VariableAlreadyExists(name)
+        }
+    }
+
+    private inline fun createNamespace(block: () -> Unit): Namespace<VariableStatus> {
+        statusStack.pushNamespace()
+        block()
+        return statusStack.popNamespace()
     }
 }
 
-private fun updateStatus(data: Namespace<VariableStatus>, status: VariableStatus, name: AstNode.NameNode): SemanticError? {
-    if (name !in data || data.get(name) == VariableStatus.DECLARED && status == VariableStatus.INITIALIZED) {
-        data.put(name, status)
-        return null
+private class StatusStack {
+    private val namespaces = mutableListOf<Namespace<VariableStatus>>()
+
+    fun pushNamespace() = namespaces.addFirst(Namespace())
+    fun popNamespace() = namespaces.removeFirst()
+
+    fun updateStatus(name: AstNode.NameNode, status: VariableStatus) {
+        namespaces.first().put(name, status)
     }
 
-    return SemanticError.VariableAlreadyExists(name)
-}
-
-private fun checkInitialized(name: AstNode.NameNode, status: VariableStatus?): SemanticError? {
-    if (status == null || status == VariableStatus.DECLARED) {
-        return SemanticError.VariableNotInitialized(name)
+    fun updateStatus(name: SymbolName, status: VariableStatus) {
+        namespaces.first().put(name, status)
     }
-    return null
-}
 
-private fun checkDeclared(name: AstNode.NameNode, status: VariableStatus?): SemanticError? {
-    if (status == null) {
-        return SemanticError.VariableNotDeclaredBeforeAssignment(name)
+    fun getAll(): Map<SymbolName, VariableStatus> {
+        return namespaces.flatMap { it.getAll().toList() }.toMap()
     }
-    return null
-}
 
-private fun checkUndeclared(name: AstNode.NameNode, status: VariableStatus?): SemanticError? {
-    if (status != null) {
-        return SemanticError.VariableAlreadyExists(name)
+    fun getStatus(name: AstNode.NameNode): VariableStatus? {
+        return namespaces.firstNotNullOfOrNull { it.get(name) }
     }
-    return null
+
+    fun getStatus(name: SymbolName): VariableStatus? {
+        return namespaces.firstNotNullOfOrNull { it.get(name) }
+    }
 }
