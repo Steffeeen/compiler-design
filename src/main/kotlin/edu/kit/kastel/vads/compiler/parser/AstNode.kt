@@ -15,6 +15,8 @@ sealed interface AstNode {
 
     sealed interface StatementNode : AstNode
 
+    sealed interface SimpleNode : StatementNode
+
     data class TypeNode(val type: Type, override val span: Span) : AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
@@ -23,7 +25,7 @@ sealed interface AstNode {
         val lValue: LValueNode,
         val operator: Token.OperatorType.AssignOperatorType,
         val expression: ExpressionNode
-    ) : StatementNode {
+    ) : SimpleNode {
 
         override val span get() = lValue.span.merge(expression.span)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
@@ -44,9 +46,7 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class DeclarationNode(val type: TypeNode, val name: NameNode, val initializer: ExpressionNode?) :
-        StatementNode {
-
+    data class DeclarationNode(val type: TypeNode, val name: NameNode, val initializer: ExpressionNode?) : SimpleNode {
         override val span get() = type.span.merge((initializer ?: name).span)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
@@ -145,9 +145,9 @@ sealed interface AstNode {
     }
 
     data class ForNode(
-        val initializer: StatementNode?,
+        val initializer: SimpleNode?,
         val condition: ExpressionNode,
-        val increment: StatementNode?,
+        val increment: SimpleNode?,
         val body: StatementNode,
         override val span: Span
     ) : StatementNode {

@@ -92,7 +92,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         }
     }
 
-    private fun parseDeclaration(): StatementNode {
+    private fun parseDeclaration(): DeclarationNode {
         val type = parseType()
         val identifier = expect<Identifier>()
 
@@ -121,7 +121,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         return statement
     }
 
-    private fun parseSimple(): StatementNode {
+    private fun parseSimple(): SimpleNode {
         return when (val token = tokenSource.peek()) {
             is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseDeclaration()
             else -> {
@@ -133,7 +133,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         }
     }
 
-    private fun parseSimpleOptional(): StatementNode? {
+    private fun parseSimpleOptional(): SimpleNode? {
         return when (val token = tokenSource.peek()) {
             is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseSimple()
             is Separator if token.type == SeparatorType.PAREN_OPEN -> parseSimple()
