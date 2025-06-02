@@ -90,18 +90,13 @@ private fun lexAndParse(input: Path): ParseResult {
 }
 
 private fun X86Assembly.assembleTo(path: Path) {
-    val tempFile = path.toAbsolutePath().parent.resolve("temp.s")
-    if (!Files.exists(tempFile)) {
-        Files.createFile(tempFile)
+    createTempFile("temp.s", path.toAbsolutePath().parent) { tempFile ->
+        when {
+            isLinux() -> assembleOnLinux(assembly, tempFile, path)
+            isMac() -> assembleOnMac(assembly, tempFile, path)
+            else -> System.err.println("Operating system ${System.getProperty("os.name")} is not supported")
+        }
     }
-
-    when {
-        isLinux() -> assembleOnLinux(assembly, tempFile, path)
-        isMac() -> assembleOnMac(assembly, tempFile, path)
-        else -> System.err.println("Operating system ${System.getProperty("os.name")} is not supported")
-    }
-
-    Files.delete(tempFile)
 }
 
 private fun assembleOnLinux(assembly: String, tempFile: Path, binary: Path) {
@@ -118,38 +113,20 @@ private fun assembleOnMac(assembly: String, tempFile: Path, binary: Path) {
         .replace("DWORD PTR", "DWORD")
     Files.writeString(tempFile, fixedAssembly)
 
-    val objectFile = tempFile.toAbsolutePath().parent.resolve("temp.o")
-
-    val result = runProcessAndMaybePrintError("nasm", "-f", "macho64", "-o", objectFile.toAbsolutePath().toString(), tempFile.toAbsolutePath().toString())
-    if (!result) {
-        return
+    createTempFile("temp.o", tempFile.toAbsolutePath().parent) { objectFile ->
+        val result = runProcessAndMaybePrintError("nasm", "-f", "macho64", "-o", objectFile.toAbsolutePath().toString(), tempFile.toAbsolutePath().toString())
+        if (!result) {
+            return
+        }
+        runProcessAndMaybePrintError(
+            "ld",
+            "-o",
+            binary.toAbsolutePath().toString(),
+            objectFile.toAbsolutePath().toString(),
+            "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
+            "-lSystem",
+            "-macos_version_min",
+            "10.14"
+        )
     }
-    runProcessAndMaybePrintError(
-        "ld",
-        "-o",
-        binary.toAbsolutePath().toString(),
-        objectFile.toAbsolutePath().toString(),
-        "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
-        "-lSystem",
-        "-macos_version_min",
-        "10.14"
-    )
-
-    Files.delete(objectFile)
 }
-
-private fun runProcessAndMaybePrintError(vararg command: String): Boolean {
-    val process = ProcessBuilder(*command).start()
-    val exitCode = process.waitFor()
-    if (exitCode != 0) {
-        System.err.println("${command[0]} returned with exit code $exitCode")
-        System.err.println("${command[0]} output:")
-        process.errorStream.transferTo(System.err)
-        return false
-    }
-    return true
-}
-
-private fun isLinux(): Boolean = System.getProperty("os.name").lowercase().contains("linux")
-private fun isMac(): Boolean = System.getProperty("os.name").lowercase().contains("mac")
-
