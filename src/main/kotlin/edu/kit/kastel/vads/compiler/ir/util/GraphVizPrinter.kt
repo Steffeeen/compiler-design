@@ -72,28 +72,10 @@ private fun StringBuilder.print(graph: IrGraph) {
 private fun GraphBuilder.printNode(node: IrNode): Int {
     val nodeId = ensureNodeExists(node)
 
-    when (node) {
-        is IrNode.DivNode, is IrNode.ModNode -> {
-            addEdge(printNode(node.left), nodeId)
-            addEdge(printNode(node.right), nodeId)
-            addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
-        }
+    node.inputs.forEach { addEdge(printNode(it), nodeId) }
 
-        is IrNode.BinaryOperationNode -> {
-            addEdge(printNode(node.left), nodeId)
-            addEdge(printNode(node.right), nodeId)
-        }
-
-        is IrNode.NegateNode -> addEdge(printNode(node.inNode), nodeId)
-        is IrNode.ReturnNode -> {
-            addEdge(printNode(node.result), nodeId)
-            addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
-        }
-
-        is IrNode.SideEffectProjectionNode -> addEdge(printNode(node.inNode), nodeId)
-        is IrNode.IntegerConstantNode -> ensureNodeExists(node)
-        IrNode.StartNode -> ensureNodeExists(node)
-        IrNode.NoOpNode -> ensureNodeExists(node)
+    if (node is IrNode.SideEffectEmittingNode) {
+        addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
     }
 
     return nodeId

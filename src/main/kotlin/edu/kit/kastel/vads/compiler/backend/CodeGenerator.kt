@@ -58,7 +58,7 @@ private fun linearizeNode(node: IrNode, visited: MutableSet<IrNode>): List<IrNod
         is IrNode.NegateNode -> linearizeNode(node.inNode, visited) + node
         IrNode.NoOpNode -> listOf()
         is IrNode.ReturnNode -> linearizeNode(node.result, visited) + linearizeNode(node.sideEffect, visited) + node
-        is IrNode.SideEffectProjectionNode -> linearizeNode(node.inNode, visited)
+        is IrNode.SideEffectProjectionNode -> linearizeNode(node.sideEffect, visited)
         IrNode.StartNode -> listOf()
     }
 
