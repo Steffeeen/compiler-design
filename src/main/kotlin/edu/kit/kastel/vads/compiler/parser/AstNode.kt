@@ -18,6 +18,8 @@ sealed interface AstNode {
 
     sealed interface SimpleNode : StatementNode
 
+    sealed interface ControlFlowEndNode : StatementNode
+
     data class TypeNode(val type: Type, override val span: Span) : AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
@@ -101,7 +103,7 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class ReturnNode(val expression: ExpressionNode, val start: Position) : StatementNode {
+    data class ReturnNode(val expression: ExpressionNode, val start: Position) : ControlFlowEndNode {
         override val span get() = Span.SimpleSpan(start, expression.span.end)
 
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
@@ -125,11 +127,11 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class BreakNode(override val span: Span) : StatementNode {
+    data class BreakNode(override val span: Span) : ControlFlowEndNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class ContinueNode(override val span: Span) : StatementNode {
+    data class ContinueNode(override val span: Span) : ControlFlowEndNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 

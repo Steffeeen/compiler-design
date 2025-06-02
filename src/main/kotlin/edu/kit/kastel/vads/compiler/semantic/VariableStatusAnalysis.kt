@@ -80,7 +80,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
             for (statement in blockNode.statements) {
                 statement.accept(this, Unit)
 
-                if (statement is AstNode.ReturnNode || statement is AstNode.BreakNode || statement is AstNode.ContinueNode) {
+                if (statement is AstNode.ControlFlowEndNode) {
                     // After a control flow node we assume that all variables that were declared before the control flow node
                     // are initialized regardless of whether they were actually initialized in the block or not
                     statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
@@ -144,7 +144,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
 
     private fun getNamespaceForBlockOrSingleStatement(statement: AstNode.StatementNode): Namespace<VariableStatus> = when (statement) {
         is AstNode.BlockNode -> blockToNamespace[statement]!!
-        is AstNode.ReturnNode, is AstNode.BreakNode, is AstNode.ContinueNode -> {
+        is AstNode.ControlFlowEndNode -> {
             // All variables after a control flow node are considered to be initialized
             createNamespace {
                 statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
