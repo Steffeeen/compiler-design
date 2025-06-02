@@ -3,9 +3,9 @@ package edu.kit.kastel.vads.compiler.typechecker
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
-import edu.kit.kastel.vads.compiler.semantic.Namespace
 import edu.kit.kastel.vads.compiler.semantic.SemanticAnalysis
 import edu.kit.kastel.vads.compiler.semantic.SemanticError
+import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
 sealed interface TypeError {
     data class MainMustReturnInt(val node: AstNode.FunctionNode) : TypeError
@@ -32,7 +32,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
 
     val errors: MutableList<TypeError> = mutableListOf()
     private val typeCache: MutableMap<AstNode.ExpressionNode, Type> = mutableMapOf()
-    private val symbolTable: SymbolTable = SymbolTable()
+    private val symbolTable = NamespaceStack<Type>()
 
     override fun visit(programNode: AstNode.ProgramNode) {
         programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
@@ -49,7 +49,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
     }
 
     override fun visit(declarationNode: AstNode.DeclarationNode) {
-        symbolTable.declareType(declarationNode.name, declarationNode.type.type)
+        symbolTable[declarationNode.name] = declarationNode.type.type
 
         if (declarationNode.initializer != null) {
             val initializerType = typeCheck(declarationNode.initializer)
@@ -59,7 +59,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
 
     override fun visit(assignmentNode: AstNode.AssignmentNode) {
         require(assignmentNode.lValue is AstNode.LValueIdentifierNode) { TODO("Currently only identifier lValues are supported") }
-        val lValueType = symbolTable.getType(assignmentNode.lValue.name) ?: error("Variable status analysis failed")
+        val lValueType = symbolTable[assignmentNode.lValue.name] ?: error("Variable status analysis failed")
         val rValueType = typeCheck(assignmentNode.expression)
 
         if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
@@ -156,7 +156,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
     private fun typeCheck(node: AstNode.ExpressionNode): Type {
         val type = when (node) {
             is AstNode.LiteralNode -> node.type
-            is AstNode.IdentifierExpressionNode -> symbolTable.getType(node.name) ?: error("Variable status analysis failed")
+            is AstNode.IdentifierExpressionNode -> symbolTable[node.name] ?: error("Variable status analysis failed")
 
             else -> {
                 node.accept(this, Unit)
@@ -230,19 +230,4 @@ private fun Token.OperatorType.BinaryOperatorType.expectedType(): BinaryOperatio
 
     Token.OperatorType.EQUAL, Token.OperatorType.NOT_EQUAL -> error("The comparison operators' expected type is always to be the same on both sides")
     Token.OperatorType.ASSIGN -> error("The assignment operator's expected type is always to just be the same on both sides")
-}
-
-private class SymbolTable {
-    private val namespaces = mutableListOf<Namespace<Type>>()
-
-    fun pushNamespace() = namespaces.addFirst(Namespace())
-    fun popNamespace() = namespaces.removeFirst()
-
-    fun declareType(name: AstNode.NameNode, type: Type) {
-        namespaces.first().put(name, type)
-    }
-
-    fun getType(name: AstNode.NameNode): Type? {
-        return namespaces.firstNotNullOfOrNull { it.get(name) }
-    }
 }

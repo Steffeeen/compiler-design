@@ -2,8 +2,9 @@ package edu.kit.kastel.vads.compiler.semantic
 
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
-import edu.kit.kastel.vads.compiler.parser.SymbolName
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
+import edu.kit.kastel.vads.compiler.util.Namespace
+import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
 /** Checks that variables are
  * - declared before assignment
@@ -30,7 +31,7 @@ private enum class VariableStatus {
 
 private class VariableStatusVisitor : VisitorWithoutData() {
     val errors = mutableListOf<SemanticError>()
-    private val statusStack = StatusStack()
+    private val statusStack = NamespaceStack<VariableStatus>()
     private val blockToNamespace = mutableMapOf<AstNode.BlockNode, Namespace<VariableStatus>>()
 
     override fun visit(programNode: AstNode.ProgramNode) = programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
@@ -82,16 +83,16 @@ private class VariableStatusVisitor : VisitorWithoutData() {
                 if (statement is AstNode.ReturnNode || statement is AstNode.BreakNode || statement is AstNode.ContinueNode) {
                     // After a control flow node we assume that all variables that were declared before the control flow node
                     // are initialized regardless of whether they were actually initialized in the block or not
-                    statusStack.getAll().forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
+                    statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
                 }
 
                 if (statement is AstNode.BlockNode) {
                     // transfer the status of variables that were initialized in the inner block to the outer block
                     val blockNamespace = blockToNamespace[statement]!!
                     val variablesToTransferToOuterBlock = blockNamespace.getAll().filter { (name, status) ->
-                        status == VariableStatus.INITIALIZED && statusStack.getStatus(name) == VariableStatus.DECLARED
+                        status == VariableStatus.INITIALIZED && statusStack[name] == VariableStatus.DECLARED
                     }
-                    variablesToTransferToOuterBlock.forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
+                    variablesToTransferToOuterBlock.forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
                 }
             }
         }
@@ -137,7 +138,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
             val variablesDeclaredBeforeIfStatement = statusStack.getAll().filterValues { it == VariableStatus.DECLARED }.keys
             val initializedInBody = bodyNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in variablesDeclaredBeforeIfStatement }.keys
             val initializedInBoth = elseNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in initializedInBody }.keys
-            initializedInBoth.forEach { statusStack.updateStatus(it, VariableStatus.INITIALIZED) }
+            initializedInBoth.forEach { statusStack[it] = VariableStatus.INITIALIZED }
         }
     }
 
@@ -146,7 +147,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
         is AstNode.ReturnNode, is AstNode.BreakNode, is AstNode.ContinueNode -> {
             // All variables after a control flow node are considered to be initialized
             createNamespace {
-                statusStack.getAll().forEach { (name, _) -> statusStack.updateStatus(name, VariableStatus.INITIALIZED) }
+                statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
             }
         }
 
@@ -159,9 +160,9 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     }
 
     private fun updateStatus(name: AstNode.NameNode, status: VariableStatus) {
-        val currentStatus = statusStack.getStatus(name)
+        val currentStatus = statusStack[name]
         if (currentStatus == null || currentStatus == VariableStatus.DECLARED && status == VariableStatus.INITIALIZED) {
-            statusStack.updateStatus(name, status)
+            statusStack[name] = status
             return
         }
 
@@ -173,21 +174,21 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     }
 
     private fun checkInitialized(name: AstNode.NameNode) {
-        val status = statusStack.getStatus(name)
+        val status = statusStack[name]
         if (status == null || status == VariableStatus.DECLARED) {
             errors += SemanticError.VariableNotInitialized(name)
         }
     }
 
     private fun checkDeclared(name: AstNode.NameNode) {
-        val status = statusStack.getStatus(name)
+        val status = statusStack[name]
         if (status == null) {
             errors += SemanticError.VariableNotDeclaredBeforeAssignment(name)
         }
     }
 
     private fun checkUndeclared(name: AstNode.NameNode) {
-        val status = statusStack.getStatus(name)
+        val status = statusStack[name]
         if (status != null) {
             errors += SemanticError.VariableAlreadyExists(name)
         }
@@ -197,32 +198,5 @@ private class VariableStatusVisitor : VisitorWithoutData() {
         statusStack.pushNamespace()
         block()
         return statusStack.popNamespace()
-    }
-}
-
-private class StatusStack {
-    private val namespaces = mutableListOf<Namespace<VariableStatus>>()
-
-    fun pushNamespace() = namespaces.addFirst(Namespace())
-    fun popNamespace() = namespaces.removeFirst()
-
-    fun updateStatus(name: AstNode.NameNode, status: VariableStatus) {
-        namespaces.first().put(name, status)
-    }
-
-    fun updateStatus(name: SymbolName, status: VariableStatus) {
-        namespaces.first().put(name, status)
-    }
-
-    fun getAll(): Map<SymbolName, VariableStatus> {
-        return namespaces.flatMap { it.getAll().toList() }.toMap()
-    }
-
-    fun getStatus(name: AstNode.NameNode): VariableStatus? {
-        return namespaces.firstNotNullOfOrNull { it.get(name) }
-    }
-
-    fun getStatus(name: SymbolName): VariableStatus? {
-        return namespaces.firstNotNullOfOrNull { it.get(name) }
     }
 }
