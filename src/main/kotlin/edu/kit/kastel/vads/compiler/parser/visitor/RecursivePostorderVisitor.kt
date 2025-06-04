@@ -8,128 +8,42 @@ import edu.kit.kastel.vads.compiler.parser.AstNode.*
  * @param <R> a type for a return type
 </R></T> */
 open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) : Visitor<T, R> {
-    override fun visit(assignmentNode: AssignmentNode, data: T): R {
-        return visitInOrderAndAccumulate(assignmentNode, data, assignmentNode.lValue, assignmentNode.expression)
-    }
+    override fun visit(assignmentNode: AssignmentNode, data: T): R = visitInOrderAndAccumulate(assignmentNode, data)
+    override fun visit(binaryOperationNode: BinaryOperationNode, data: T): R = visitInOrderAndAccumulate(binaryOperationNode, data)
+    override fun visit(blockNode: BlockNode, data: T): R = visitInOrderAndAccumulate(blockNode, data)
+    override fun visit(declarationNode: DeclarationNode, data: T): R = visitInOrderAndAccumulate(declarationNode, data)
+    override fun visit(functionNode: FunctionNode, data: T): R = visitInOrderAndAccumulate(functionNode, data)
+    override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T): R = visitInOrderAndAccumulate(identifierExpressionNode, data)
+    override fun visit(intLiteralNode: IntLiteralNode, data: T): R = visitInOrderAndAccumulate(intLiteralNode, data)
+    override fun visit(booleanLiteralNode: BooleanLiteralNode, data: T): R = visitInOrderAndAccumulate(booleanLiteralNode, data)
+    override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T): R = visitInOrderAndAccumulate(lValueIdentifierNode, data)
+    override fun visit(nameNode: NameNode, data: T): R = visitInOrderAndAccumulate(nameNode, data)
+    override fun visit(unaryOperationNode: UnaryOperationNode, data: T): R = visitInOrderAndAccumulate(unaryOperationNode, data)
+    override fun visit(programNode: ProgramNode, data: T): R = visitInOrderAndAccumulate(programNode, data)
+    override fun visit(returnNode: ReturnNode, data: T): R = visitInOrderAndAccumulate(returnNode, data)
+    override fun visit(typeNode: TypeNode, data: T): R = visitInOrderAndAccumulate(typeNode, data)
+    override fun visit(ifNode: IfNode, data: T): R = visitInOrderAndAccumulate(ifNode, data)
+    override fun visit(whileNode: WhileNode, data: T): R = visitInOrderAndAccumulate(whileNode, data)
+    override fun visit(forNode: ForNode, data: T): R = visitInOrderAndAccumulate(forNode, data)
+    override fun visit(breakNode: BreakNode, data: T): R = visitInOrderAndAccumulate(breakNode, data)
+    override fun visit(continueNode: ContinueNode, data: T): R = visitInOrderAndAccumulate(continueNode, data)
+    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T): R = visitInOrderAndAccumulate(ternaryOperationNode, data)
 
-    override fun visit(binaryOperationNode: BinaryOperationNode, data: T): R {
-        return visitInOrderAndAccumulate(binaryOperationNode, data, binaryOperationNode.left, binaryOperationNode.right)
-    }
-
-    override fun visit(blockNode: BlockNode, data: T): R {
-        return visitInOrderAndAccumulate(blockNode, data, *blockNode.statements.toTypedArray())
-    }
-
-    override fun visit(declarationNode: DeclarationNode, data: T): R {
-        return visitInOrderAndAccumulate(
-            declarationNode,
-            data,
-            declarationNode.type,
-            declarationNode.name,
-            declarationNode.initializer
-        )
-    }
-
-    override fun visit(functionNode: FunctionNode, data: T): R {
-        return visitInOrderAndAccumulate(
-            functionNode,
-            data,
-            functionNode.returnType,
-            functionNode.name,
-            functionNode.body
-        )
-    }
-
-    override fun visit(identifierExpressionNode: IdentifierExpressionNode, data: T): R {
-        return visitInOrderAndAccumulate(identifierExpressionNode, data, identifierExpressionNode.name)
-    }
-
-    override fun visit(intLiteralNode: IntLiteralNode, data: T): R {
-        return visitor.visit(intLiteralNode, data)
-    }
-
-    override fun visit(booleanLiteralNode: BooleanLiteralNode, data: T): R {
-        return visitor.visit(booleanLiteralNode, data)
-    }
-
-    override fun visit(lValueIdentifierNode: LValueIdentifierNode, data: T): R {
-        return visitInOrderAndAccumulate(lValueIdentifierNode, data, lValueIdentifierNode.name)
-    }
-
-    override fun visit(nameNode: NameNode, data: T): R {
-        return visitor.visit(nameNode, data)
-    }
-
-    override fun visit(unaryOperationNode: UnaryOperationNode, data: T): R {
-        return visitInOrderAndAccumulate(unaryOperationNode, data, unaryOperationNode.expression)
-    }
-
-    override fun visit(programNode: ProgramNode, data: T): R {
-        return visitInOrderAndAccumulate(programNode, data, *programNode.topLevelFunctions.toTypedArray())
-    }
-
-    override fun visit(returnNode: ReturnNode, data: T): R {
-        return visitInOrderAndAccumulate(returnNode, data, returnNode.expression)
-    }
-
-    override fun visit(typeNode: TypeNode, data: T): R {
-        return visitor.visit(typeNode, data)
-    }
-
-    override fun visit(ifNode: IfNode, data: T): R {
-        return visitInOrderAndAccumulate(ifNode, data, ifNode.condition, ifNode.body, ifNode.elseStatement)
-    }
-
-    override fun visit(whileNode: WhileNode, data: T): R {
-        return visitInOrderAndAccumulate(whileNode, data, whileNode.condition, whileNode.body)
-    }
-
-    override fun visit(forNode: ForNode, data: T): R {
-        return visitInOrderAndAccumulate(
-            forNode,
-            data,
-            forNode.initializer,
-            forNode.condition,
-            forNode.increment,
-            forNode.body
-        )
-    }
-
-    override fun visit(breakNode: BreakNode, data: T): R = visitor.visit(breakNode, data)
-
-    override fun visit(continueNode: ContinueNode, data: T): R = visitor.visit(continueNode, data)
-
-    override fun visit(ternaryOperationNode: TernaryOperationNode, data: T): R {
-        return visitInOrderAndAccumulate(
-            ternaryOperationNode, data,
-            ternaryOperationNode.condition,
-            ternaryOperationNode.trueExpression,
-            ternaryOperationNode.falseExpression
-        )
-    }
-
-    private fun visitInOrderAndAccumulate(
-        currentNode: AstNode,
-        data: T,
-        vararg nodes: AstNode?
-    ): R {
-        val filteredNodes = nodes.filterNotNull()
-        if (filteredNodes.isEmpty()) {
+    private fun visitInOrderAndAccumulate(currentNode: AstNode, data: T): R {
+        val nodes = currentNode.children
+        if (nodes.isEmpty()) {
             return visitHelper(currentNode, data)
         }
-        var result = filteredNodes.first().accept<T, R>(this, data)
+        var result = nodes.first().accept<T, R>(this, data)
 
-        for (node in filteredNodes.drop(1)) {
+        for (node in nodes.drop(1)) {
             result = node.accept(this, accumulate(data, result))
         }
 
         return visitHelper(currentNode, data)
     }
 
-    private fun visitHelper(
-        node: AstNode,
-        data: T
-    ): R {
+    private fun visitHelper(node: AstNode, data: T): R {
         val accumulatedData = data
         return when (node) {
             is AssignmentNode -> visitor.visit(node, accumulatedData)
