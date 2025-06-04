@@ -2,7 +2,7 @@ package edu.kit.kastel.vads.compiler.typechecker
 
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
-import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
+import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithParents
 import edu.kit.kastel.vads.compiler.semantic.SemanticAnalysis
 import edu.kit.kastel.vads.compiler.semantic.SemanticError
 import edu.kit.kastel.vads.compiler.util.NamespaceStack
@@ -28,27 +28,19 @@ object TypeChecking : SemanticAnalysis {
     }
 }
 
-private class TypeCheckingVisitor : VisitorWithoutData() {
+private class TypeCheckingVisitor : VisitorWithParents() {
 
     val errors: MutableList<TypeError> = mutableListOf()
     private val typeCache: MutableMap<AstNode.ExpressionNode, Type> = mutableMapOf()
     private val symbolTable = NamespaceStack<Type>()
 
-    override fun visit(programNode: AstNode.ProgramNode) {
-        programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
-    }
-
-    override fun visit(functionNode: AstNode.FunctionNode) {
-        functionNode.body.accept(this, Unit)
-    }
-
-    override fun visit(blockNode: AstNode.BlockNode) {
+    override fun visit(blockNode: AstNode.BlockNode, parents: List<AstNode>) {
         createNamespace {
             blockNode.statements.forEach { typeCheck(it) }
         }
     }
 
-    override fun visit(declarationNode: AstNode.DeclarationNode) {
+    override fun visit(declarationNode: AstNode.DeclarationNode, parents: List<AstNode>) {
         symbolTable[declarationNode.name] = declarationNode.type.type
 
         if (declarationNode.initializer != null) {
@@ -57,7 +49,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         }
     }
 
-    override fun visit(assignmentNode: AstNode.AssignmentNode) {
+    override fun visit(assignmentNode: AstNode.AssignmentNode, parents: List<AstNode>) {
         require(assignmentNode.lValue is AstNode.LValueIdentifierNode) { TODO("Currently only identifier lValues are supported") }
         val lValueType = symbolTable[assignmentNode.lValue.name] ?: error("Variable status analysis failed")
         val rValueType = typeCheck(assignmentNode.expression)
@@ -72,7 +64,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         compareTypes(expectedRValueType, rValueType, assignmentNode.expression)
     }
 
-    override fun visit(binaryOperationNode: AstNode.BinaryOperationNode) {
+    override fun visit(binaryOperationNode: AstNode.BinaryOperationNode, parents: List<AstNode>) {
         val leftType = typeCheck(binaryOperationNode.left)
         val rightType = typeCheck(binaryOperationNode.right)
 
@@ -89,7 +81,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         typeCache[binaryOperationNode] = resultType
     }
 
-    override fun visit(unaryOperationNode: AstNode.UnaryOperationNode) {
+    override fun visit(unaryOperationNode: AstNode.UnaryOperationNode, parents: List<AstNode>) {
         val expressionType = typeCheck(unaryOperationNode.expression)
 
         val expectedType = when (unaryOperationNode.operator) {
@@ -102,12 +94,13 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         typeCache[unaryOperationNode] = expectedType
     }
 
-    override fun visit(returnNode: AstNode.ReturnNode) {
+    override fun visit(returnNode: AstNode.ReturnNode, parents: List<AstNode>) {
         val returnType = typeCheck(returnNode.expression)
-        compareTypes(Type.IntType, returnType, returnNode.expression)
+        val functionType = parents.filterIsInstance<AstNode.FunctionNode>().first().returnType.type
+        compareTypes(functionType, returnType, returnNode.expression)
     }
 
-    override fun visit(ifNode: AstNode.IfNode) {
+    override fun visit(ifNode: AstNode.IfNode, parents: List<AstNode>) {
         val conditionType = typeCheck(ifNode.condition)
         compareTypes(Type.BoolType, conditionType, ifNode.condition)
 
@@ -118,14 +111,14 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         }
     }
 
-    override fun visit(whileNode: AstNode.WhileNode) {
+    override fun visit(whileNode: AstNode.WhileNode, parents: List<AstNode>) {
         val conditionType = typeCheck(whileNode.condition)
         compareTypes(Type.BoolType, conditionType, whileNode.condition)
 
         typeCheck(whileNode.body)
     }
 
-    override fun visit(forNode: AstNode.ForNode) {
+    override fun visit(forNode: AstNode.ForNode, parents: List<AstNode>) {
         createNamespace {
             if (forNode.initializer != null) {
                 typeCheck(forNode.initializer)
@@ -142,7 +135,7 @@ private class TypeCheckingVisitor : VisitorWithoutData() {
         }
     }
 
-    override fun visit(ternaryOperationNode: AstNode.TernaryOperationNode) {
+    override fun visit(ternaryOperationNode: AstNode.TernaryOperationNode, parents: List<AstNode>) {
         val conditionType = typeCheck(ternaryOperationNode.condition)
         compareTypes(Type.BoolType, conditionType, ternaryOperationNode.condition)
 
