@@ -83,7 +83,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
                 if (statement is AstNode.ControlFlowEndNode) {
                     // After a control flow node we assume that all variables that were declared before the control flow node
                     // are initialized regardless of whether they were actually initialized in the block or not
-                    statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
+                    statusStack.getAll().forEach { (name, _) -> statusStack.setInTopMost(name, VariableStatus.INITIALIZED) }
                 }
 
                 if (statement is AstNode.BlockNode) {
@@ -92,7 +92,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
                     val variablesToTransferToOuterBlock = blockNamespace.getAll().filter { (name, status) ->
                         status == VariableStatus.INITIALIZED && statusStack[name] == VariableStatus.DECLARED
                     }
-                    variablesToTransferToOuterBlock.forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
+                    variablesToTransferToOuterBlock.forEach { (name, _) -> statusStack.setInTopMost(name, VariableStatus.INITIALIZED) }
                 }
             }
         }
@@ -138,7 +138,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
             val variablesDeclaredBeforeIfStatement = statusStack.getAll().filterValues { it == VariableStatus.DECLARED }.keys
             val initializedInBody = bodyNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in variablesDeclaredBeforeIfStatement }.keys
             val initializedInBoth = elseNamespace.getAll().filter { (name, status) -> status == VariableStatus.INITIALIZED && name in initializedInBody }.keys
-            initializedInBoth.forEach { statusStack[it] = VariableStatus.INITIALIZED }
+            initializedInBoth.forEach { statusStack.setInTopMost(it, VariableStatus.INITIALIZED) }
         }
     }
 
@@ -147,7 +147,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
         is AstNode.ControlFlowEndNode -> {
             // All variables after a control flow node are considered to be initialized
             createNamespace {
-                statusStack.getAll().forEach { (name, _) -> statusStack[name] = VariableStatus.INITIALIZED }
+                statusStack.getAll().forEach { (name, _) -> statusStack.setInTopMost(name, VariableStatus.INITIALIZED) }
             }
         }
 
@@ -162,7 +162,7 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     private fun updateStatus(name: AstNode.NameNode, status: VariableStatus) {
         val currentStatus = statusStack[name]
         if (currentStatus == null || currentStatus == VariableStatus.DECLARED && status == VariableStatus.INITIALIZED) {
-            statusStack[name] = status
+            statusStack.setInTopMost(name, status)
             return
         }
 

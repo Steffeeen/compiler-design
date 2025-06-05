@@ -9,11 +9,11 @@ class NamespaceStack<T> {
     fun pushNamespace() = namespaces.addLast(Namespace())
     fun popNamespace() = namespaces.removeLast()
 
-    operator fun set(name: SymbolName, value: T) {
+    fun setInTopMost(name: SymbolName, value: T) {
         namespaces.last()[name] = value
     }
 
-    operator fun set(name: AstNode.NameNode, value: T) {
+    fun setInTopMost(name: AstNode.NameNode, value: T) {
         namespaces.last()[name] = value
     }
 

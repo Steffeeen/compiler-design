@@ -41,7 +41,7 @@ private class TypeCheckingVisitor : VisitorWithParents() {
     }
 
     override fun visit(declarationNode: AstNode.DeclarationNode, parents: List<AstNode>) {
-        symbolTable[declarationNode.name] = declarationNode.type.type
+        symbolTable.setInTopMost(declarationNode.name, declarationNode.type.type)
 
         if (declarationNode.initializer != null) {
             val initializerType = typeCheck(declarationNode.initializer)
