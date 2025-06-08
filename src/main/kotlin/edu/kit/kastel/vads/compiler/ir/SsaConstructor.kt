@@ -42,7 +42,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.IfNode -> handleIfNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.BreakNode -> TODO()
             is AstNode.ContinueNode -> TODO()
-            is AstNode.ForNode -> TODO()
+            is AstNode.ForNode -> handleForNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.WhileNode -> handleWhileNode(astNode, lastSideEffectNode, lastControlNode)
         }
     }
@@ -238,11 +238,57 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     context(scopeNode: IrNode.ScopeNode)
     private fun handleWhileNode(astNode: AstNode.WhileNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         val loopRegion = IrNode.LoopRegionNode(lastControlNode, null)
-
         val whileScopeNode = scopeNode.duplicate()
+        val incompletePhis = createInCompletePhis(astNode.body, whileScopeNode, loopRegion)
 
+        // Create the while loop condition and body
+        val result = with(whileScopeNode) {
+            val (bodySideEffectNode, _, falseProjectionNode) = createLoopConditionAndBody(astNode.condition, astNode.body, lastSideEffectNode, loopRegion)
+
+            bodySideEffectNode to falseProjectionNode
+        }
+
+        updatePhisAtLoopEnd(incompletePhis, whileScopeNode)
+
+        return result
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleForNode(astNode: AstNode.ForNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
+        // The for loop is desugared to a while loop with the initializer as a statement before the while loop.
+        // The increment is executed at the end of the loop body.
+        val (newSideEffectNode, newControlNode) = if (astNode.initializer != null) {
+            createIrNodeForStatement(astNode.initializer, lastSideEffectNode, lastControlNode)
+        } else {
+            lastSideEffectNode to lastControlNode
+        }
+
+        val loopRegion = IrNode.LoopRegionNode(newControlNode, null)
+        val forScopeNode = scopeNode.duplicate()
+        val incompletePhis = createInCompletePhis(astNode, forScopeNode, loopRegion)
+
+        // Create the condition and body
+        val result = with(forScopeNode) {
+            val (bodySideEffectNode, bodyControlNode, falseProjectionNode) = createLoopConditionAndBody(astNode.condition, astNode.body, newSideEffectNode, loopRegion)
+
+            // Handle the increment statement
+            if (astNode.increment != null) {
+                val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
+                incrementSideEffectNode to falseProjectionNode
+            } else {
+                bodySideEffectNode to falseProjectionNode
+            }
+        }
+
+        updatePhisAtLoopEnd(incompletePhis, forScopeNode)
+
+        return result
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createInCompletePhis(statement: AstNode.StatementNode, loopScopeNode: IrNode.ScopeNode, loopRegion: IrNode.LoopRegionNode): List<IrNode.PhiNode> {
         // Create incomplete phis for all variables that are written in the loop body
-        val writtenVariables = findWrittenVariablesInStatement(astNode)
+        val writtenVariables = findWrittenVariablesInStatement(statement)
         val writtenAndReadVariables = writtenVariables.intersect(scopeNode.getAll().keys)
 
         val incompletePhis = mutableListOf<IrNode.PhiNode>()
@@ -250,32 +296,10 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             val currentValue = readVariable(variableName)
             val incompletePhiNode = IrNode.PhiNode(variableName, currentValue, null, loopRegion)
             incompletePhis.add(incompletePhiNode)
-            with(whileScopeNode) { writeVariable(variableName, incompletePhiNode) }
+            with(loopScopeNode) { writeVariable(variableName, incompletePhiNode) }
         }
 
-        // Create the while loop condition and body
-        val result = with(whileScopeNode) {
-            val (conditionNode, newSideEffectNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode)
-            val loopEntryNode = IrNode.IfNode(conditionNode, loopRegion)
-            val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
-            val falseProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.FALSE_BRANCH)
-
-            val (bodySideEffectNode, bodyControlNode) = createIrNodeForStatement(astNode.body, newSideEffectNode, trueProjectionNode)
-
-            loopRegion.backEdge = bodyControlNode
-
-            bodySideEffectNode to falseProjectionNode
-        }
-
-        // Update the incomplete phi nodes with the values of the variables at the end of the loop body
-        for (incompletePhiNode in incompletePhis) {
-            val value = with(whileScopeNode) { readVariable(incompletePhiNode.name) }
-            require(value != incompletePhiNode)
-            incompletePhiNode.second = value
-            writeVariable(incompletePhiNode.name, incompletePhiNode)
-        }
-
-        return result
+        return incompletePhis
     }
 
     private fun findWrittenVariablesInStatement(statement: AstNode.StatementNode): Set<SymbolName> {
@@ -290,6 +314,36 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         statement.accept(RecursivePostorderVisitor(visitor), Unit)
 
         return writtenVariables
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createLoopConditionAndBody(
+        condition: AstNode.ExpressionNode,
+        body: AstNode.StatementNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        loopRegion: IrNode.LoopRegionNode
+    ): Triple<IrNode.SideEffectNode, IrNode.ControlNode, IrNode.IfProjectionNode> {
+        val (conditionNode, newSideEffectNode) = createIrNodeForExpression(condition, lastSideEffectNode)
+        val loopEntryNode = IrNode.IfNode(conditionNode, loopRegion)
+        val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
+        val falseProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.FALSE_BRANCH)
+
+        val (bodySideEffectNode, bodyControlNode) = createIrNodeForStatement(body, newSideEffectNode, trueProjectionNode)
+
+        loopRegion.backEdge = bodyControlNode
+
+        return Triple(bodySideEffectNode, bodyControlNode, falseProjectionNode)
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun updatePhisAtLoopEnd(incompletePhis: List<IrNode.PhiNode>, loopScopeNode: IrNode.ScopeNode) {
+        // Update the incomplete phi nodes with the values of the variables at the end of the loop body
+        for (incompletePhiNode in incompletePhis) {
+            val value = with(loopScopeNode) { readVariable(incompletePhiNode.name) }
+            require(value != incompletePhiNode)
+            incompletePhiNode.second = value
+            writeVariable(incompletePhiNode.name, incompletePhiNode)
+        }
     }
 
     context(scopeNode: IrNode.ScopeNode)

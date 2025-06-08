@@ -87,7 +87,6 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
 
     if (node is IrNode.PhiNode) {
         addEdge(nodeId, printNode(node.region), EdgeType.CONTROL)
-//        node.dataInputs.filter { it !in printedNodesToNumber }.forEach { addEdge(printNode(it), nodeId) }
         node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
         return nodeId
     }
@@ -105,9 +104,7 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
         addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
     }
     if (node is IrNode.ControlRelevantNode) {
-//        if (node.control !in printedNodesToNumber) {
         addEdge(printNode(node.control), nodeId, EdgeType.CONTROL)
-//        }
     }
 
     return nodeId
