@@ -7,13 +7,15 @@ private const val INDENT_WIDTH = 4
 private val INDENT = " ".repeat(INDENT_WIDTH)
 
 private enum class EdgeType {
-    NORMAL,
-    SIDE_EFFECT
+    DATA,
+    SIDE_EFFECT,
+    CONTROL,
 }
 
 private fun EdgeType.color(): String = when (this) {
-    EdgeType.NORMAL -> "black"
+    EdgeType.DATA -> "black"
     EdgeType.SIDE_EFFECT -> "blue"
+    EdgeType.CONTROL -> "red"
 }
 
 private data class GraphBuilder(
@@ -31,7 +33,7 @@ private data class GraphBuilder(
         return id
     }
 
-    fun addEdge(fromId: Int, toId: Int, type: EdgeType = EdgeType.NORMAL) {
+    fun addEdge(fromId: Int, toId: Int, type: EdgeType = EdgeType.DATA) {
         if (fromId == toId) return
         if (createdEdges.contains(fromId to toId)) return
         createdEdges.add(fromId to toId)
@@ -61,7 +63,9 @@ private fun StringBuilder.suffix() {
 private fun StringBuilder.print(graph: IrGraph) {
     val graphBuilder = GraphBuilder()
     with(graphBuilder) {
-        printNode(graph.returnNode)
+        val nodeId = ensureNodeExists(graph.endNode)
+        addEdge(printNode(graph.endNode.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
+        graph.endNode.returnNodes.forEach { addEdge(printNode(it), nodeId, EdgeType.CONTROL) }
     }
     appendLine()
     append(graphBuilder.nodeBuilder)
@@ -70,12 +74,40 @@ private fun StringBuilder.print(graph: IrGraph) {
 }
 
 private fun GraphBuilder.printNode(node: IrNode): Int {
+    if (node in printedNodesToNumber) {
+        return printedNodesToNumber[node]!!
+    }
     val nodeId = ensureNodeExists(node)
 
-    node.inputs.forEach { addEdge(printNode(it), nodeId) }
+    if (node is IrNode.RegionNode) {
+        addEdge(printNode(node.first), nodeId, EdgeType.CONTROL)
+        addEdge(printNode(node.second!!), nodeId, EdgeType.CONTROL)
+        return nodeId
+    }
 
-    if (node is IrNode.SideEffectEmittingNode) {
+    if (node is IrNode.PhiNode) {
+        addEdge(nodeId, printNode(node.region), EdgeType.CONTROL)
+//        node.dataInputs.filter { it !in printedNodesToNumber }.forEach { addEdge(printNode(it), nodeId) }
+        node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
+        return nodeId
+    }
+
+    if (node is IrNode.SideEffectPhiNode) {
+        addEdge(printNode(node.first), nodeId, EdgeType.SIDE_EFFECT)
+        addEdge(printNode(node.second), nodeId, EdgeType.SIDE_EFFECT)
+        return nodeId
+    }
+
+    if (node is IrNode.DataNode) {
+        node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
+    }
+    if (node is IrNode.SideEffectRelevantNode) {
         addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
+    }
+    if (node is IrNode.ControlRelevantNode) {
+//        if (node.control !in printedNodesToNumber) {
+        addEdge(printNode(node.control), nodeId, EdgeType.CONTROL)
+//        }
     }
 
     return nodeId
@@ -86,6 +118,18 @@ private fun IrNode.displayName(): String {
 
     if (this is IrNode.IntegerConstantNode) {
         return "$baseName [${this.value}]"
+    }
+
+    if (this is IrNode.BooleanConstantNode) {
+        return "$baseName [${this.value}]"
+    }
+
+    if (this is IrNode.IfProjectionNode) {
+        return "$baseName [${this.type}]"
+    }
+
+    if (this is IrNode.PhiNode) {
+        return "$baseName [${this.name.asString()}]"
     }
 
     return baseName

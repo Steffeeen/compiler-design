@@ -24,7 +24,7 @@ fun generateX86Assembly(irGraphs: List<IrGraph>): X86Assembly = X86Assembly(buil
 })
 
 private fun IrGraph.linearize(): List<IrNode> {
-    val nodes = linearizeNode(this.returnNode, mutableSetOf())
+    val nodes = linearizeNode(this.endNode, mutableSetOf())
     require(nodes.last() is IrNode.ReturnNode)
     return nodes
 }
@@ -38,7 +38,7 @@ private fun linearizeNode(node: IrNode, visited: MutableSet<IrNode>): List<IrNod
 
     val linearizedNodes = when (node) {
         is IrNode.BinaryOperationNode -> {
-            val sideEffectNodes = if (node is IrNode.SideEffectEmittingNode) {
+            val sideEffectNodes = if (node is IrNode.SideEffectRelevantNode) {
                 linearizeNode(node.sideEffect, visited)
             } else {
                 listOf()
@@ -56,10 +56,17 @@ private fun linearizeNode(node: IrNode, visited: MutableSet<IrNode>): List<IrNod
 
         is IrNode.IntegerConstantNode -> listOf()
         is IrNode.NegateNode -> linearizeNode(node.inNode, visited) + node
-        IrNode.NoOpNode -> listOf()
         is IrNode.ReturnNode -> linearizeNode(node.result, visited) + linearizeNode(node.sideEffect, visited) + node
         is IrNode.SideEffectProjectionNode -> linearizeNode(node.sideEffect, visited)
         IrNode.StartNode -> listOf()
+        is IrNode.EndNode -> TODO()
+        is IrNode.IfNode -> TODO()
+        is IrNode.IfProjectionNode -> TODO()
+        is IrNode.RegionNode -> TODO()
+        is IrNode.SideEffectPhiNode -> TODO()
+        is IrNode.PhiNode -> TODO()
+        is IrNode.ScopeNode -> TODO()
+        is IrNode.BooleanConstantNode -> TODO()
     }
 
     return linearizedNodes
@@ -115,8 +122,16 @@ private fun StringBuilder.generateNode(node: IrNode) {
         is IrNode.ReturnNode -> generateReturn(node)
         is IrNode.IntegerConstantNode -> {} // handled in the generation of the add, sub, mul, div, mod, negate nodes
         is IrNode.SideEffectProjectionNode -> {}
-        IrNode.NoOpNode -> {}
         IrNode.StartNode -> {}
+        is IrNode.EndNode -> TODO()
+        is IrNode.IfNode -> TODO()
+        is IrNode.IfProjectionNode -> TODO()
+        is IrNode.RegionNode -> TODO()
+        is IrNode.SideEffectPhiNode -> TODO()
+        is IrNode.PhiNode -> TODO()
+        is IrNode.ScopeNode -> TODO()
+        is IrNode.BooleanConstantNode -> TODO()
+        is IrNode.LessThanNode -> TODO()
     }
 }
 

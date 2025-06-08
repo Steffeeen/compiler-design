@@ -33,4 +33,10 @@ class Namespace<T> {
     operator fun contains(name: SymbolName): Boolean {
         return content.containsKey(name)
     }
+
+    fun duplicate(): Namespace<T> {
+        val newNamespace = Namespace<T>()
+        newNamespace.content.putAll(this.content)
+        return newNamespace
+    }
 }

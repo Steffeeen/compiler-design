@@ -4,171 +4,316 @@ import edu.kit.kastel.vads.compiler.CompilerOptions
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.SymbolName
+import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
+import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
+import edu.kit.kastel.vads.compiler.util.Namespace
 
-context(options: CompilerOptions)
-fun buildIr(function: AstNode.FunctionNode): IrGraph {
-    val statements = getStatementsUntilFirstReturn(function.body.statements)
+context(compilerOptions: CompilerOptions)
+fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions).buildIr(function)
 
-    val currentDefinitions = mutableMapOf<SymbolName, IrNode>()
+private typealias StatementReturn = Pair<IrNode.SideEffectNode, IrNode.ControlNode>
+private typealias ExpressionReturn = Pair<IrNode.DataNode, IrNode.SideEffectNode>
 
-    val sideEffectNode = statements.dropLast(1).fold(IrNode.StartNode as IrNode.SideEffectNode) { sideEffectNode, statement ->
-        with(currentDefinitions) {
-            val (_, newSideEffectNode) = createIrNodeForAstNode(statement, sideEffectNode)
-            newSideEffectNode
+private class SsaConstructor(val compilerOptions: CompilerOptions) {
+    private val returnNodes = mutableListOf<IrNode.ReturnNode>()
+
+    fun buildIr(function: AstNode.FunctionNode): IrGraph {
+        val scopeNode = IrNode.ScopeNode()
+        val (sideEffectNode, controlNode) = with(scopeNode) {
+            createIrNodeForStatement(function.body, IrNode.StartNode, IrNode.StartNode)
+        }
+
+        val endNode = IrNode.EndNode(returnNodes, sideEffectNode, controlNode)
+
+        return IrGraph(endNode, function.name.name.asString())
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createIrNodeForStatement(
+        astNode: AstNode.StatementNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): StatementReturn {
+        return when (astNode) {
+            is AstNode.AssignmentNode -> handleAssignmentNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.DeclarationNode -> handleDeclarationNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.BlockNode -> handleBlockNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.ReturnNode -> handleReturnNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.IfNode -> handleIfNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.BreakNode -> TODO()
+            is AstNode.ContinueNode -> TODO()
+            is AstNode.ForNode -> TODO()
+            is AstNode.WhileNode -> handleWhileNode(astNode, lastSideEffectNode, lastControlNode)
         }
     }
 
-    val (returnIrNode, _) = with(currentDefinitions) {
-        val returnStatement = statements.last()
-        require(returnStatement is AstNode.ReturnNode) { "Last statement must be a return statement" }
-        createReturnIrNode(returnStatement, sideEffectNode)
-    }
-
-    return IrGraph(returnIrNode, function.name.name.asString())
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun createIrNodeForAstNode(
-    astNode: AstNode,
-    lastSideEffectNode: IrNode.SideEffectNode
-): Pair<IrNode, IrNode.SideEffectNode> {
-    return when (astNode) {
-        is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode)
-        is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode)
-        is AstNode.LiteralNode -> Pair(createConstantIntegerIrNode(astNode), lastSideEffectNode)
-        is AstNode.UnaryOperationNode -> createNegateIrNode(astNode, lastSideEffectNode)
-        is AstNode.AssignmentNode -> handleAssignmentNode(astNode, lastSideEffectNode)
-        is AstNode.DeclarationNode -> handleDeclarationNode(astNode, lastSideEffectNode)
-        is AstNode.ReturnNode -> createReturnIrNode(astNode, lastSideEffectNode)
-        is AstNode.LValueIdentifierNode -> TODO()
-        is AstNode.NameNode -> TODO()
-        is AstNode.TypeNode -> TODO()
-        is AstNode.FunctionNode -> TODO()
-        is AstNode.BlockNode -> TODO()
-        is AstNode.ProgramNode -> TODO()
-        is AstNode.TernaryOperationNode -> TODO()
-        is AstNode.BreakNode -> TODO()
-        is AstNode.ContinueNode -> TODO()
-        is AstNode.ForNode -> TODO()
-        is AstNode.IfNode -> TODO()
-        is AstNode.WhileNode -> TODO()
-    }
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun createBinaryOperationIrNode(
-    binaryOperationAstNode: AstNode.BinaryOperationNode,
-    lastSideEffectNode: IrNode.SideEffectNode
-): Pair<IrNode, IrNode.SideEffectNode> {
-    val (leftIrNode, newSideEffectNode) = createIrNodeForAstNode(binaryOperationAstNode.left, lastSideEffectNode)
-    val (rightIrNode, newSideEffectNode2) = createIrNodeForAstNode(binaryOperationAstNode.right, newSideEffectNode)
-
-    return when (binaryOperationAstNode.operatorType) {
-        Token.OperatorType.ADD -> IrNode.AddNode(leftIrNode, rightIrNode) to newSideEffectNode2
-        Token.OperatorType.SUB -> IrNode.SubNode(leftIrNode, rightIrNode) to newSideEffectNode2
-        Token.OperatorType.MUL -> IrNode.MulNode(leftIrNode, rightIrNode) to newSideEffectNode2
-        Token.OperatorType.DIV -> {
-            val divNode = IrNode.DivNode(leftIrNode, rightIrNode, newSideEffectNode2)
-            divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
-        }
-
-        Token.OperatorType.MOD -> {
-            val modNode = IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
-            modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
-        }
-
-        else -> error("Unsupported operator type: ${binaryOperationAstNode.operatorType}")
-    }
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun handleIdentifierExpressionNode(identifierAstNode: AstNode.IdentifierExpressionNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode, IrNode.SideEffectNode> {
-    val variableName = identifierAstNode.name.name
-    val irNode = readVariable(variableName)
-    return irNode to lastSideEffectNode
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun createNegateIrNode(
-    unaryOperationNode: AstNode.UnaryOperationNode,
-    lastSideEffectNode: IrNode.SideEffectNode
-): Pair<IrNode, IrNode.SideEffectNode> {
-    require(unaryOperationNode.operator == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
-
-    val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(unaryOperationNode.expression, lastSideEffectNode)
-    return Pair(IrNode.NegateNode(expressionIrNode), newSideEffectNode)
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode, IrNode.SideEffectNode> {
-    val desugar: ((IrNode, IrNode, IrNode.SideEffectNode) -> Pair<IrNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator) {
-        Token.OperatorType.ASSIGN -> null
-        Token.OperatorType.ASSIGN_ADD -> { left, right, sideEffect -> IrNode.AddNode(left, right) to sideEffect }
-        Token.OperatorType.ASSIGN_SUB -> { left, right, sideEffect -> IrNode.SubNode(left, right) to sideEffect }
-        Token.OperatorType.ASSIGN_MUL -> { left, right, sideEffect -> IrNode.MulNode(left, right) to sideEffect }
-        Token.OperatorType.ASSIGN_DIV -> { left, right, sideEffectNode ->
-            val divNode = IrNode.DivNode(left, right, sideEffectNode)
-            divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
-        }
-
-        Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
-            val modNode = IrNode.ModNode(left, right, sideEffectNode)
-            modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
-        }
-        else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
-    }
-
-    val (expressionNode, newSideEffectNode) = createIrNodeForAstNode(assignmentNode.expression, lastSideEffectNode)
-
-    when (val lValue = assignmentNode.lValue) {
-        is AstNode.LValueIdentifierNode -> {
-            val (newValue, newSideEffectNode2) = desugar?.invoke(readVariable(lValue.name.name), expressionNode, newSideEffectNode) ?: Pair(expressionNode, newSideEffectNode)
-            writeVariable(lValue.name.name, newValue)
-            return newValue to newSideEffectNode2
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createIrNodeForExpression(astNode: AstNode.ExpressionNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
+        return when (astNode) {
+            is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode)
+            is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode)
+            is AstNode.LiteralNode -> Pair(createLiteralIrNode(astNode), lastSideEffectNode)
+            is AstNode.UnaryOperationNode -> createNegateIrNode(astNode, lastSideEffectNode)
+            is AstNode.TernaryOperationNode -> TODO()
         }
     }
-}
 
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun handleDeclarationNode(declarationNode: AstNode.DeclarationNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode, IrNode.SideEffectNode> {
-    if (declarationNode.initializer == null) {
-        // TODO: figure out a better way to hande this case
-        // for now, we just create a no-op node
-        // this is fine as the node should never be used anywhere as the semantic analysis catches uses of uninitialized variables
-        return IrNode.NoOpNode to lastSideEffectNode
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createBinaryOperationIrNode(
+        binaryOperationAstNode: AstNode.BinaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode
+    ): ExpressionReturn {
+        val (leftIrNode, newSideEffectNode) = createIrNodeForExpression(binaryOperationAstNode.left, lastSideEffectNode)
+        val (rightIrNode, newSideEffectNode2) = createIrNodeForExpression(binaryOperationAstNode.right, newSideEffectNode)
+
+        return when (binaryOperationAstNode.operatorType) {
+            Token.OperatorType.ADD -> IrNode.AddNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.SUB -> IrNode.SubNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.MUL -> IrNode.MulNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.DIV -> {
+                val divNode = IrNode.DivNode(leftIrNode, rightIrNode, newSideEffectNode2)
+                divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
+            }
+
+            Token.OperatorType.MOD -> {
+                val modNode = IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
+                modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
+            }
+
+            Token.OperatorType.LESS_THAN -> {
+                IrNode.LessThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            }
+
+            else -> error("Unsupported operator type: ${binaryOperationAstNode.operatorType}")
+        }
     }
 
-    val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(declarationNode.initializer, lastSideEffectNode)
-    writeVariable(declarationNode.name.name, expressionIrNode)
-    return expressionIrNode to newSideEffectNode
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleIdentifierExpressionNode(
+        identifierAstNode: AstNode.IdentifierExpressionNode,
+        lastSideEffectNode: IrNode.SideEffectNode
+    ): ExpressionReturn {
+        val variableName = identifierAstNode.name.name
+        val irNode = readVariable(variableName)
+        return irNode to lastSideEffectNode
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun createNegateIrNode(
+        unaryOperationNode: AstNode.UnaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode
+    ): ExpressionReturn {
+        require(unaryOperationNode.operator == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
+
+        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(unaryOperationNode.expression, lastSideEffectNode)
+        return Pair(IrNode.NegateNode(expressionIrNode), newSideEffectNode)
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleAssignmentNode(
+        assignmentNode: AstNode.AssignmentNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): StatementReturn {
+        val desugar: ((IrNode.DataNode, IrNode.DataNode, IrNode.SideEffectNode) -> Pair<IrNode.DataNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator) {
+            Token.OperatorType.ASSIGN -> null
+            Token.OperatorType.ASSIGN_ADD -> { left, right, sideEffect -> IrNode.AddNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_SUB -> { left, right, sideEffect -> IrNode.SubNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_MUL -> { left, right, sideEffect -> IrNode.MulNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_DIV -> { left, right, sideEffectNode ->
+                val divNode = IrNode.DivNode(left, right, sideEffectNode)
+                divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
+            }
+
+            Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
+                val modNode = IrNode.ModNode(left, right, sideEffectNode)
+                modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
+            }
+
+            else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
+        }
+
+        val (expressionNode, newSideEffectNode) = createIrNodeForExpression(assignmentNode.expression, lastSideEffectNode)
+
+        when (val lValue = assignmentNode.lValue) {
+            is AstNode.LValueIdentifierNode -> {
+                val (newValue, newSideEffectNode2) = desugar?.invoke(readVariable(lValue.name.name), expressionNode, newSideEffectNode) ?: Pair(expressionNode, newSideEffectNode)
+                writeVariable(lValue.name.name, newValue)
+                return newSideEffectNode2 to lastControlNode
+            }
+        }
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleDeclarationNode(
+        declarationNode: AstNode.DeclarationNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): StatementReturn {
+        if (declarationNode.initializer == null) {
+            return lastSideEffectNode to lastControlNode
+        }
+
+        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(declarationNode.initializer, lastSideEffectNode)
+        writeVariable(declarationNode.name.name, expressionIrNode)
+        return newSideEffectNode to lastControlNode
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleBlockNode(blockNode: AstNode.BlockNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
+        val (newSideEffectNode, namespace) = createNamespace {
+            val statements = getStatementsUntilFirstControlFlowEndingStatement(blockNode.statements)
+
+            statements.fold(Pair(lastSideEffectNode, lastControlNode)) { (sideEffectNode, controlNode), statement ->
+                createIrNodeForStatement(statement, sideEffectNode, controlNode)
+            }
+        }
+
+
+
+        return newSideEffectNode
+    }
+
+    private fun createLiteralIrNode(literalAstNode: AstNode.LiteralNode): IrNode.ConstantNode {
+        return when (literalAstNode) {
+            is AstNode.BooleanLiteralNode -> IrNode.BooleanConstantNode(literalAstNode.value)
+            is AstNode.IntLiteralNode -> IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
+        }
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleReturnNode(
+        astNode: AstNode.ReturnNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): StatementReturn {
+        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode)
+        val returnNode = IrNode.ReturnNode(expressionIrNode, newSideEffectNode, lastControlNode)
+        returnNodes.add(returnNode)
+        return returnNode to returnNode
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleIfNode(astNode: AstNode.IfNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
+        val (conditionNode, newSideEffectNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode)
+        val ifNode = IrNode.IfNode(conditionNode, lastControlNode)
+
+        val trueProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.TRUE_BRANCH)
+        val falseProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.FALSE_BRANCH)
+
+        val bodyScopeNode = scopeNode.duplicate()
+
+        val (bodySideEffectNode, bodyControlNode) = with(bodyScopeNode) {
+            createIrNodeForStatement(astNode.body, newSideEffectNode, trueProjectionNode)
+        }
+
+        val (elseSideEffectNode, elseControlNode, elseScopeNode) = if (astNode.elseStatement != null) {
+            val elseScopeNode = scopeNode.duplicate()
+            val (elseSideEffectNode, elseControlNode) = with(elseScopeNode) {
+                createIrNodeForStatement(astNode.elseStatement, newSideEffectNode, falseProjectionNode)
+            }
+
+            Triple(elseSideEffectNode, elseControlNode, elseScopeNode)
+        } else {
+            Triple(newSideEffectNode, falseProjectionNode, scopeNode)
+        }
+
+        val regionNode = IrNode.RegionNode(bodyControlNode, elseControlNode)
+        val newSideEffectNode2 = if (bodySideEffectNode != elseSideEffectNode) {
+            IrNode.SideEffectPhiNode(bodySideEffectNode, elseSideEffectNode, regionNode)
+        } else {
+            bodySideEffectNode
+        }
+
+        val differingDefinitions = bodyScopeNode.merge(elseScopeNode)
+
+        for ((variableName, definitions) in differingDefinitions.entries) {
+            val phiNode = IrNode.PhiNode(variableName, definitions.first, definitions.second, regionNode)
+            writeVariable(variableName, phiNode)
+        }
+
+        return newSideEffectNode2 to regionNode
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun handleWhileNode(astNode: AstNode.WhileNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
+        val loopRegion = IrNode.LoopRegionNode(lastControlNode, null)
+
+        val whileScopeNode = scopeNode.duplicate()
+
+        // Create incomplete phis for all variables that are written in the loop body
+        val writtenVariables = findWrittenVariablesInStatement(astNode)
+        val writtenAndReadVariables = writtenVariables.intersect(scopeNode.getAll().keys)
+
+        val incompletePhis = mutableListOf<IrNode.PhiNode>()
+        for (variableName in writtenAndReadVariables) {
+            val currentValue = readVariable(variableName)
+            val incompletePhiNode = IrNode.PhiNode(variableName, currentValue, null, loopRegion)
+            incompletePhis.add(incompletePhiNode)
+            with(whileScopeNode) { writeVariable(variableName, incompletePhiNode) }
+        }
+
+        // Create the while loop condition and body
+        val result = with(whileScopeNode) {
+            val (conditionNode, newSideEffectNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode)
+            val loopEntryNode = IrNode.IfNode(conditionNode, loopRegion)
+            val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
+            val falseProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.FALSE_BRANCH)
+
+            val (bodySideEffectNode, bodyControlNode) = createIrNodeForStatement(astNode.body, newSideEffectNode, trueProjectionNode)
+
+            loopRegion.backEdge = bodyControlNode
+
+            bodySideEffectNode to falseProjectionNode
+        }
+
+        // Update the incomplete phi nodes with the values of the variables at the end of the loop body
+        for (incompletePhiNode in incompletePhis) {
+            val value = with(whileScopeNode) { readVariable(incompletePhiNode.name) }
+            require(value != incompletePhiNode)
+            incompletePhiNode.second = value
+            writeVariable(incompletePhiNode.name, incompletePhiNode)
+        }
+
+        return result
+    }
+
+    private fun findWrittenVariablesInStatement(statement: AstNode.StatementNode): Set<SymbolName> {
+        val writtenVariables = mutableSetOf<SymbolName>()
+
+        val visitor = object : VisitorWithoutData() {
+            override fun visit(lValueIdentifierNode: AstNode.LValueIdentifierNode) {
+                writtenVariables.add(lValueIdentifierNode.name.name)
+            }
+        }
+
+        statement.accept(RecursivePostorderVisitor(visitor), Unit)
+
+        return writtenVariables
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun writeVariable(variableName: SymbolName, value: IrNode.DataNode) {
+        scopeNode[variableName] = value
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private fun readVariable(variableName: SymbolName): IrNode.DataNode {
+        return scopeNode[variableName]!!
+    }
+
+    context(scopeNode: IrNode.ScopeNode)
+    private inline fun <T> createNamespace(block: () -> T): Pair<T, Namespace<IrNode.DataNode>> {
+        scopeNode.pushNamespace()
+        val result = block()
+        val namespace = scopeNode.popNamespace()
+        return result to namespace
+    }
+
 }
 
-private fun createConstantIntegerIrNode(literalAstNode: AstNode.LiteralNode): IrNode.IntegerConstantNode {
-    require(literalAstNode is AstNode.IntLiteralNode) { TODO("Only integer literals are supported for now") }
-    return IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun createReturnIrNode(
-    astNode: AstNode.ReturnNode,
-    lastSideEffectNode: IrNode.SideEffectNode
-): Pair<IrNode.ReturnNode, IrNode.SideEffectNode> {
-    val (expressionIrNode, newSideEffectNode) = createIrNodeForAstNode(astNode.expression, lastSideEffectNode)
-    return Pair(IrNode.ReturnNode(expressionIrNode, newSideEffectNode), newSideEffectNode)
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun writeVariable(variableName: SymbolName, value: IrNode) {
-    currentDefinitions[variableName] = value
-}
-
-context(currentDefinitions: MutableMap<SymbolName, IrNode>)
-private fun readVariable(variableName: SymbolName): IrNode {
-    return currentDefinitions[variableName] ?: TODO("look in predecessor blocks once we have them")
-}
-
-private fun getStatementsUntilFirstReturn(statements: List<AstNode>): List<AstNode> {
-    val returnIndex = statements.indexOfFirst { it is AstNode.ReturnNode }
+private fun getStatementsUntilFirstControlFlowEndingStatement(statements: List<AstNode.StatementNode>): List<AstNode.StatementNode> {
+    val returnIndex = statements.indexOfFirst { it is AstNode.ControlFlowEndNode }
     return if (returnIndex == -1) {
         statements
     } else {
