@@ -19,6 +19,7 @@ import edu.kit.kastel.vads.compiler.parser.printAst
 import edu.kit.kastel.vads.compiler.semantic.analyzeProgram
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import kotlin.system.exitProcess
 
 fun main(args: Array<String>) = CompilerOptions().main(args)
@@ -26,6 +27,7 @@ fun main(args: Array<String>) = CompilerOptions().main(args)
 class CompilerOptions : CliktCommand() {
     val printAst by option("--print-ast", envvar = "PRINT_AST", help = "Print the AST").flag(default = false)
     val printIrToFile by option("--print-ir", envvar = "PRINT_IR", help = "Print the IR to a file").flag(default = false)
+    val overwriteIrFile by option("--overwrite-ir", envvar = "OVERWRITE_IR", help = "Overwrite the IR file if it already exists").flag(default = false)
     val printAssembly by option("--print-assembly", envvar = "PRINT_ASSEMBLY", help = "Print the generated assembly").flag(default = false)
 
     val inputFile by argument("input_file", completionCandidates = CompletionCandidates.Path).path(mustExist = true, canBeFile = true, canBeDir = false)
@@ -66,8 +68,8 @@ private fun CompilerOptions.runCompiler() {
     if (printIrToFile) {
         // currently only the main function exists, thus only it gets printed
         val dotFile = outputFile.toAbsolutePath().parent.resolve("graph.dot")
-        if (!Files.exists(dotFile)) {
-            Files.writeString(dotFile, irGraphs.find { it.name == "main" }!!.toDotVisualization())
+        if (overwriteIrFile || !Files.exists(dotFile)) {
+            Files.writeString(dotFile, irGraphs.find { it.name == "main" }!!.toDotVisualization(), StandardOpenOption.CREATE)
         } else {
             System.err.println("File '${dotFile.toAbsolutePath()}' already exists, skipping write.")
         }
