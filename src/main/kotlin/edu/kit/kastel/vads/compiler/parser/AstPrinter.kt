@@ -133,7 +133,7 @@ private fun printForNode(node: ForNode, depth: Int): String {
 private fun printIfNode(node: IfNode, depth: Int): String {
     val condition = printNode(node.condition, depth + INDENT)
     val thenBranch = printNode(node.body, depth + INDENT)
-    val elseBranch = node.elseStatement?.let { printNode(it, depth + INDENT) } ?: "no else branch"
+    val elseBranch = node.elseStatement?.let { printNode(it, depth + INDENT) } ?: (" ".repeat(depth + INDENT) + "no else branch")
     return "${printNodeNameAndSpan(node, depth)}\n$condition\n$thenBranch\n$elseBranch"
 }
 
