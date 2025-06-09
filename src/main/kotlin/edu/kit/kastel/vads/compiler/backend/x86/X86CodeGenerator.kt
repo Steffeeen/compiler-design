@@ -1,5 +1,6 @@
-package edu.kit.kastel.vads.compiler.backend
+package edu.kit.kastel.vads.compiler.backend.x86
 
+import edu.kit.kastel.vads.compiler.backend.RegisterAllocation
 import edu.kit.kastel.vads.compiler.ir.IrGraph
 import edu.kit.kastel.vads.compiler.ir.IrNode
 
