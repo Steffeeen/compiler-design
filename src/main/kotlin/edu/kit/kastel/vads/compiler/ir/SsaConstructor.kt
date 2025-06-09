@@ -52,11 +52,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
     private fun createIrNodeForExpression(astNode: AstNode.ExpressionNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
         return when (astNode) {
-            is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode)
-            is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode)
-            is AstNode.LiteralNode -> Pair(createLiteralIrNode(astNode), lastSideEffectNode)
-            is AstNode.UnaryOperationNode -> createNegateIrNode(astNode, lastSideEffectNode)
-            is AstNode.TernaryOperationNode -> TODO()
+            is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.LiteralNode -> Triple(createLiteralIrNode(astNode), lastSideEffectNode, lastControlNode)
+            is AstNode.UnaryOperationNode -> createUnaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.TernaryOperationNode -> handleTernaryOperationNode(astNode, lastSideEffectNode, lastControlNode)
         }
     }
 
@@ -73,16 +73,23 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 val divNode = IrNode.DivNode(leftIrNode, rightIrNode, newSideEffectNode2)
                 divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
             }
-
             Token.OperatorType.MOD -> {
                 val modNode = IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
                 modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
             }
-
-            Token.OperatorType.LESS_THAN -> {
-                IrNode.LessThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            }
-
+            Token.OperatorType.LESS_THAN -> IrNode.LessThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.LESS_EQUAL -> IrNode.LessThanOrEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.GREATER_THAN -> IrNode.GreaterThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.GREATER_EQUAL -> IrNode.GreaterThanOrEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.EQUAL -> IrNode.EqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.NOT_EQUAL -> IrNode.NotEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.BITWISE_AND -> IrNode.BitwiseAndNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.BITWISE_XOR -> IrNode.BitwiseXorNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.BITWISE_OR -> IrNode.BitwiseOrNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.LEFT_SHIFT -> IrNode.LeftShiftNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.RIGHT_SHIFT -> IrNode.RightShiftNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.LOGICAL_AND -> IrNode.LogicalAndNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            Token.OperatorType.LOGICAL_OR -> IrNode.LogicalOrNode(leftIrNode, rightIrNode) to newSideEffectNode2
             else -> error("Unsupported operator type: ${binaryOperationAstNode.operatorType}")
         }
     }
@@ -95,11 +102,16 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun createNegateIrNode(unaryOperationNode: AstNode.UnaryOperationNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
-        require(unaryOperationNode.operator == Token.OperatorType.SUB) { TODO("Only negate operation is supported for now") }
-
+    private fun createUnaryOperationIrNode(unaryOperationNode: AstNode.UnaryOperationNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
         val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(unaryOperationNode.expression, lastSideEffectNode)
-        return Pair(IrNode.NegateNode(expressionIrNode), newSideEffectNode)
+
+        val unaryOperationIrNode = when (unaryOperationNode.operator) {
+            Token.OperatorType.SUB -> IrNode.NegateNode(expressionIrNode)
+            Token.OperatorType.LOGICAL_NOT -> IrNode.LogicalNotNode(expressionIrNode)
+            Token.OperatorType.BITWISE_NOT -> IrNode.BitwiseNotNode(expressionIrNode)
+        }
+
+        return Pair(unaryOperationIrNode, newSideEffectNode)
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
@@ -113,12 +125,10 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 val divNode = IrNode.DivNode(left, right, sideEffectNode)
                 divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
             }
-
             Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
                 val modNode = IrNode.ModNode(left, right, sideEffectNode)
                 modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
             }
-
             else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
         }
 

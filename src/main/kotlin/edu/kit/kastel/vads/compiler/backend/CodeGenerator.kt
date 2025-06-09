@@ -67,6 +67,8 @@ private fun linearizeNode(node: IrNode, visited: MutableSet<IrNode>): List<IrNod
         is IrNode.PhiNode -> TODO()
         is IrNode.ScopeNode -> TODO()
         is IrNode.BooleanConstantNode -> TODO()
+        is IrNode.BitwiseNotNode -> TODO()
+        is IrNode.LogicalNotNode -> TODO()
     }
 
     return linearizedNodes
@@ -132,6 +134,20 @@ private fun StringBuilder.generateNode(node: IrNode) {
         is IrNode.ScopeNode -> TODO()
         is IrNode.BooleanConstantNode -> TODO()
         is IrNode.LessThanNode -> TODO()
+        is IrNode.BitwiseAndNode -> TODO()
+        is IrNode.BitwiseOrNode -> TODO()
+        is IrNode.BitwiseXorNode -> TODO()
+        is IrNode.EqualNode -> TODO()
+        is IrNode.GreaterThanNode -> TODO()
+        is IrNode.GreaterThanOrEqualNode -> TODO()
+        is IrNode.LeftShiftNode -> TODO()
+        is IrNode.LessThanOrEqualNode -> TODO()
+        is IrNode.LogicalAndNode -> TODO()
+        is IrNode.LogicalOrNode -> TODO()
+        is IrNode.NotEqualNode -> TODO()
+        is IrNode.RightShiftNode -> TODO()
+        is IrNode.BitwiseNotNode -> TODO()
+        is IrNode.LogicalNotNode -> TODO()
     }
 }
 

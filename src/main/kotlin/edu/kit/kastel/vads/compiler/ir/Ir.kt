@@ -64,9 +64,6 @@ sealed interface IrNode {
 
     class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 
-    enum class IfProjectionType { TRUE_BRANCH, FALSE_BRANCH }
-    data class IfProjectionNode(override val control: IfNode, val type: IfProjectionType) : ControlRelevantNode
-
     // Binary operations
     sealed interface BinaryOperationNode : DataNode {
         val left: DataNode
@@ -80,7 +77,19 @@ sealed interface IrNode {
     class MulNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class DivNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectRelevantNode
     class ModNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectRelevantNode
+    class LeftShiftNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class RightShiftNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class LessThanNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class LessThanOrEqualNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class GreaterThanNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class GreaterThanOrEqualNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class EqualNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class NotEqualNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class BitwiseAndNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class BitwiseXorNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class BitwiseOrNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class LogicalAndNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
+    class LogicalOrNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
 
     // Unary operations
     sealed interface UnaryOperationNode : DataNode {
@@ -90,6 +99,8 @@ sealed interface IrNode {
     }
 
     class NegateNode(override val inNode: DataNode) : UnaryOperationNode
+    class LogicalNotNode(override val inNode: DataNode) : UnaryOperationNode
+    class BitwiseNotNode(override val inNode: DataNode) : UnaryOperationNode
 
     // Constants
     sealed interface ConstantNode : DataNode {
@@ -100,6 +111,7 @@ sealed interface IrNode {
 
     data class BooleanConstantNode(val value: Boolean) : ConstantNode
 
+    // Control flow
     class ReturnNode(val result: DataNode, override val sideEffect: SideEffectNode, override val control: ControlNode) : DataNode, SideEffectRelevantNode, ControlRelevantNode {
         override val dataInputs: List<DataNode> = listOf(result)
     }
@@ -107,6 +119,9 @@ sealed interface IrNode {
     class IfNode(val condition: DataNode, override val control: ControlNode) : DataNode, ControlRelevantNode {
         override val dataInputs: List<DataNode> = listOf(condition)
     }
+
+    enum class IfProjectionType { TRUE_BRANCH, FALSE_BRANCH }
+    data class IfProjectionNode(override val control: IfNode, val type: IfProjectionType) : ControlRelevantNode
 
     open class RegionNode(val first: ControlNode, open var second: ControlNode?) : ControlRelevantNode {
         override val control: ControlNode = first
