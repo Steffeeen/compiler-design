@@ -11,7 +11,7 @@ context(compilerOptions: CompilerOptions)
 fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions).buildIr(function)
 
 private typealias StatementReturn = Pair<IrNode.SideEffectNode, IrNode.ControlNode>
-private typealias ExpressionReturn = Pair<IrNode.DataNode, IrNode.SideEffectNode>
+private typealias ExpressionReturn = Triple<IrNode.DataNode, IrNode.SideEffectNode, IrNode.ControlNode>
 
 private data class LoopScopes(
     var afterLoopControlNode: IrNode.ControlNode? = null,
@@ -50,7 +50,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun createIrNodeForExpression(astNode: AstNode.ExpressionNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
+    private fun createIrNodeForExpression(astNode: AstNode.ExpressionNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
         return when (astNode) {
             is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.IdentifierExpressionNode -> handleIdentifierExpressionNode(astNode, lastSideEffectNode, lastControlNode)
@@ -61,49 +61,66 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun createBinaryOperationIrNode(binaryOperationAstNode: AstNode.BinaryOperationNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
-        val (leftIrNode, newSideEffectNode) = createIrNodeForExpression(binaryOperationAstNode.left, lastSideEffectNode)
-        val (rightIrNode, newSideEffectNode2) = createIrNodeForExpression(binaryOperationAstNode.right, newSideEffectNode)
+    private fun createBinaryOperationIrNode(
+        binaryOperationAstNode: AstNode.BinaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): ExpressionReturn {
+        val (leftIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(binaryOperationAstNode.left, lastSideEffectNode, lastControlNode)
+        val (rightIrNode, newSideEffectNode2, newControlNode2) = createIrNodeForExpression(binaryOperationAstNode.right, newSideEffectNode, newControlNode)
 
-        return when (binaryOperationAstNode.operatorType) {
-            Token.OperatorType.ADD -> IrNode.AddNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.SUB -> IrNode.SubNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.MUL -> IrNode.MulNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.DIV -> {
-                val divNode = IrNode.DivNode(leftIrNode, rightIrNode, newSideEffectNode2)
-                divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
+        if (binaryOperationAstNode.operatorType == Token.OperatorType.DIV || binaryOperationAstNode.operatorType == Token.OperatorType.MOD) {
+            // For division and modulo, we need to handle the division by zero exception
+            val irNode = if (binaryOperationAstNode.operatorType == Token.OperatorType.DIV) {
+                IrNode.DivNode(leftIrNode, rightIrNode, newSideEffectNode2)
+            } else {
+                IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
             }
-            Token.OperatorType.MOD -> {
-                val modNode = IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
-                modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
-            }
-            Token.OperatorType.LESS_THAN -> IrNode.LessThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.LESS_EQUAL -> IrNode.LessThanOrEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.GREATER_THAN -> IrNode.GreaterThanNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.GREATER_EQUAL -> IrNode.GreaterThanOrEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.EQUAL -> IrNode.EqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.NOT_EQUAL -> IrNode.NotEqualNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.BITWISE_AND -> IrNode.BitwiseAndNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.BITWISE_XOR -> IrNode.BitwiseXorNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.BITWISE_OR -> IrNode.BitwiseOrNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.LEFT_SHIFT -> IrNode.LeftShiftNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.RIGHT_SHIFT -> IrNode.RightShiftNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.LOGICAL_AND -> IrNode.LogicalAndNode(leftIrNode, rightIrNode) to newSideEffectNode2
-            Token.OperatorType.LOGICAL_OR -> IrNode.LogicalOrNode(leftIrNode, rightIrNode) to newSideEffectNode2
+            val sideEffectNode = IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, irNode)
+            return Triple(irNode, sideEffectNode, newControlNode2)
+        }
+
+        val irNode = when (binaryOperationAstNode.operatorType) {
+            Token.OperatorType.ADD -> IrNode.AddNode(leftIrNode, rightIrNode)
+            Token.OperatorType.SUB -> IrNode.SubNode(leftIrNode, rightIrNode)
+            Token.OperatorType.MUL -> IrNode.MulNode(leftIrNode, rightIrNode)
+            Token.OperatorType.LESS_THAN -> IrNode.LessThanNode(leftIrNode, rightIrNode)
+            Token.OperatorType.LESS_EQUAL -> IrNode.LessThanOrEqualNode(leftIrNode, rightIrNode)
+            Token.OperatorType.GREATER_THAN -> IrNode.GreaterThanNode(leftIrNode, rightIrNode)
+            Token.OperatorType.GREATER_EQUAL -> IrNode.GreaterThanOrEqualNode(leftIrNode, rightIrNode)
+            Token.OperatorType.EQUAL -> IrNode.EqualNode(leftIrNode, rightIrNode)
+            Token.OperatorType.NOT_EQUAL -> IrNode.NotEqualNode(leftIrNode, rightIrNode)
+            Token.OperatorType.BITWISE_AND -> IrNode.BitwiseAndNode(leftIrNode, rightIrNode)
+            Token.OperatorType.BITWISE_XOR -> IrNode.BitwiseXorNode(leftIrNode, rightIrNode)
+            Token.OperatorType.BITWISE_OR -> IrNode.BitwiseOrNode(leftIrNode, rightIrNode)
+            Token.OperatorType.LEFT_SHIFT -> IrNode.LeftShiftNode(leftIrNode, rightIrNode)
+            Token.OperatorType.RIGHT_SHIFT -> IrNode.RightShiftNode(leftIrNode, rightIrNode)
+            Token.OperatorType.LOGICAL_AND -> IrNode.LogicalAndNode(leftIrNode, rightIrNode)
+            Token.OperatorType.LOGICAL_OR -> IrNode.LogicalOrNode(leftIrNode, rightIrNode)
             else -> error("Unsupported operator type: ${binaryOperationAstNode.operatorType}")
         }
+
+        return Triple(irNode, newSideEffectNode2, newControlNode2)
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun handleIdentifierExpressionNode(identifierAstNode: AstNode.IdentifierExpressionNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
+    private fun handleIdentifierExpressionNode(
+        identifierAstNode: AstNode.IdentifierExpressionNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): ExpressionReturn {
         val variableName = identifierAstNode.name.name
         val irNode = readVariable(variableName)
-        return irNode to lastSideEffectNode
+        return Triple(irNode, lastSideEffectNode, lastControlNode)
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun createUnaryOperationIrNode(unaryOperationNode: AstNode.UnaryOperationNode, lastSideEffectNode: IrNode.SideEffectNode): ExpressionReturn {
-        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(unaryOperationNode.expression, lastSideEffectNode)
+    private fun createUnaryOperationIrNode(
+        unaryOperationNode: AstNode.UnaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): ExpressionReturn {
+        val (expressionIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(unaryOperationNode.expression, lastSideEffectNode, lastControlNode)
 
         val unaryOperationIrNode = when (unaryOperationNode.operator) {
             Token.OperatorType.SUB -> IrNode.NegateNode(expressionIrNode)
@@ -111,7 +128,50 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             Token.OperatorType.BITWISE_NOT -> IrNode.BitwiseNotNode(expressionIrNode)
         }
 
-        return Pair(unaryOperationIrNode, newSideEffectNode)
+        return Triple(unaryOperationIrNode, newSideEffectNode, newControlNode)
+    }
+
+    context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
+    private fun handleTernaryOperationNode(
+        ternaryOperationNode: AstNode.TernaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): ExpressionReturn {
+        // Ternary operations are desugared to an if statement with two branches.
+        val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(ternaryOperationNode.condition, lastSideEffectNode, lastControlNode)
+        val ifNode = IrNode.IfNode(conditionNode, newControlNode)
+
+        val trueProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.TRUE_BRANCH)
+        val falseProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.FALSE_BRANCH)
+
+        val (trueExpressionNode, trueExpressionSideEffectNode, trueExpressionControlNode) = createIrNodeForExpression(
+            ternaryOperationNode.trueExpression,
+            newSideEffectNode,
+            trueProjectionNode
+        )
+        val (falseExpressionNode, falseExpressionSideEffectNode, falseExpressionControlNode) = createIrNodeForExpression(
+            ternaryOperationNode.falseExpression,
+            newSideEffectNode,
+            falseProjectionNode
+        )
+
+        val regionNode = IrNode.RegionNode(trueExpressionControlNode, falseExpressionControlNode)
+        val phiNode = IrNode.PhiNode(
+            SymbolName.InternalVariable("ternary_result"),
+            trueExpressionNode,
+            falseExpressionNode,
+            regionNode
+        )
+
+        val newSideEffectNode2 = if (trueExpressionSideEffectNode == falseExpressionSideEffectNode) {
+            require(trueExpressionSideEffectNode == newSideEffectNode)
+            // If both branches have the same side effect, they both don't have side effects so we just don't need to create a side effect phi node
+            newSideEffectNode
+        } else {
+            IrNode.SideEffectPhiNode(trueExpressionSideEffectNode, falseExpressionSideEffectNode, regionNode)
+        }
+
+        return Triple(phiNode, newSideEffectNode2, regionNode)
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
@@ -132,13 +192,13 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
         }
 
-        val (expressionNode, newSideEffectNode) = createIrNodeForExpression(assignmentNode.expression, lastSideEffectNode)
+        val (expressionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(assignmentNode.expression, lastSideEffectNode, lastControlNode)
 
         when (val lValue = assignmentNode.lValue) {
             is AstNode.LValueIdentifierNode -> {
                 val (newValue, newSideEffectNode2) = desugar?.invoke(readVariable(lValue.name.name), expressionNode, newSideEffectNode) ?: Pair(expressionNode, newSideEffectNode)
                 writeVariable(lValue.name.name, newValue)
-                return newSideEffectNode2 to lastControlNode
+                return newSideEffectNode2 to newControlNode
             }
         }
     }
@@ -149,9 +209,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             return lastSideEffectNode to lastControlNode
         }
 
-        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(declarationNode.initializer, lastSideEffectNode)
+        val (expressionIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(declarationNode.initializer, lastSideEffectNode, lastControlNode)
         writeVariable(declarationNode.name.name, expressionIrNode)
-        return newSideEffectNode to lastControlNode
+        return newSideEffectNode to newControlNode
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
@@ -176,16 +236,16 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
     private fun handleReturnNode(astNode: AstNode.ReturnNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
-        val (expressionIrNode, newSideEffectNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode)
-        val returnNode = IrNode.ReturnNode(expressionIrNode, newSideEffectNode, lastControlNode)
+        val (expressionIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode, lastControlNode)
+        val returnNode = IrNode.ReturnNode(expressionIrNode, newSideEffectNode, newControlNode)
         returnNodes.add(returnNode)
         return returnNode to returnNode
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
     private fun handleIfNode(astNode: AstNode.IfNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
-        val (conditionNode, newSideEffectNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode)
-        val ifNode = IrNode.IfNode(conditionNode, lastControlNode)
+        val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode, lastControlNode)
+        val ifNode = IrNode.IfNode(conditionNode, newControlNode)
 
         val trueProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.TRUE_BRANCH)
         val falseProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.FALSE_BRANCH)
@@ -336,8 +396,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         lastSideEffectNode: IrNode.SideEffectNode,
         loopRegion: IrNode.LoopRegionNode
     ): Triple<IrNode.SideEffectNode, IrNode.ControlNode, IrNode.ControlNode> {
-        val (conditionNode, newSideEffectNode) = createIrNodeForExpression(condition, lastSideEffectNode)
-        val loopEntryNode = IrNode.IfNode(conditionNode, loopRegion)
+        val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(condition, lastSideEffectNode, loopRegion)
+        val loopEntryNode = IrNode.IfNode(conditionNode, newControlNode)
         val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
         val falseProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.FALSE_BRANCH)
 

@@ -9,6 +9,10 @@ interface SymbolName {
         override fun asString(): String = identifier
     }
 
+    data class InternalVariable(val name: String) : SymbolName {
+        override fun asString(): String = "internal:$name"
+    }
+
     companion object {
         fun forIdentifier(identifier: Token.Identifier): SymbolName {
             return Identifier(identifier.value)
