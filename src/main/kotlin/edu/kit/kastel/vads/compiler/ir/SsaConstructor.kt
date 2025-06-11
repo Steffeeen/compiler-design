@@ -8,7 +8,13 @@ import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
 
 context(compilerOptions: CompilerOptions)
-fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions).buildIr(function)
+fun buildIr(program: AstNode.ProgramNode): IrProgram {
+    val graphs = program.topLevelFunctions.map { buildIr(it) }
+    return IrProgram(graphs)
+}
+
+context(compilerOptions: CompilerOptions)
+private fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions).buildIr(function)
 
 private typealias StatementReturn = Pair<IrNode.SideEffectNode, IrNode.ControlNode>
 private typealias ExpressionReturn = Triple<IrNode.DataNode, IrNode.SideEffectNode, IrNode.ControlNode>

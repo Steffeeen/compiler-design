@@ -7,6 +7,8 @@ enum class SideEffectType {
     DIVISION_BY_ZERO_EXCEPTION
 }
 
+data class IrProgram(val graphs: List<IrGraph>)
+
 data class IrGraph(val endNode: IrNode.EndNode, val name: String)
 
 sealed interface IrNode {

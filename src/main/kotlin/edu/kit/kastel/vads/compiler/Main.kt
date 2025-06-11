@@ -63,19 +63,19 @@ private fun CompilerOptions.runCompiler() {
         println(printAst(program))
     }
 
-    val irGraphs = program.topLevelFunctions.map { buildIr(it) }
+    val irProgram = buildIr(program)
 
     if (printIrToFile) {
         // currently only the main function exists, thus only it gets printed
         val dotFile = outputFile.toAbsolutePath().parent.resolve("graph.dot")
         if (overwriteIrFile || !Files.exists(dotFile)) {
-            Files.writeString(dotFile, irGraphs.find { it.name == "main" }!!.toDotVisualization(), StandardOpenOption.CREATE)
+            Files.writeString(dotFile, irProgram.graphs.find { it.name == "main" }!!.toDotVisualization(), StandardOpenOption.CREATE)
         } else {
             System.err.println("File '${dotFile.toAbsolutePath()}' already exists, skipping write.")
         }
     }
 
-    val assembly = generateX86Assembly(irGraphs)
+    val assembly = generateX86Assembly(irProgram.graphs)
 
     if (printAssembly) {
         println(assembly.assembly)
