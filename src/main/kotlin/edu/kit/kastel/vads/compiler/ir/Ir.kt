@@ -90,8 +90,6 @@ sealed interface IrNode {
     class BitwiseAndNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class BitwiseXorNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class BitwiseOrNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
-    class LogicalAndNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
-    class LogicalOrNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
 
     // Unary operations
     sealed interface UnaryOperationNode : DataNode {

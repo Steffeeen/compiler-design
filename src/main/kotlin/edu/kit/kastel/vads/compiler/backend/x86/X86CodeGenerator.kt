@@ -143,8 +143,6 @@ private fun StringBuilder.generateNode(node: IrNode) {
         is IrNode.GreaterThanOrEqualNode -> TODO()
         is IrNode.LeftShiftNode -> TODO()
         is IrNode.LessThanOrEqualNode -> TODO()
-        is IrNode.LogicalAndNode -> TODO()
-        is IrNode.LogicalOrNode -> TODO()
         is IrNode.NotEqualNode -> TODO()
         is IrNode.RightShiftNode -> TODO()
         is IrNode.BitwiseNotNode -> TODO()

@@ -72,6 +72,10 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         lastSideEffectNode: IrNode.SideEffectNode,
         lastControlNode: IrNode.ControlNode
     ): ExpressionReturn {
+        if (binaryOperationAstNode.operatorType == Token.OperatorType.LOGICAL_AND || binaryOperationAstNode.operatorType == Token.OperatorType.LOGICAL_OR) {
+            return createLogicalBinaryOperationIrNode(binaryOperationAstNode, lastSideEffectNode, lastControlNode)
+        }
+
         val (leftIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(binaryOperationAstNode.left, lastSideEffectNode, lastControlNode)
         val (rightIrNode, newSideEffectNode2, newControlNode2) = createIrNodeForExpression(binaryOperationAstNode.right, newSideEffectNode, newControlNode)
 
@@ -101,12 +105,44 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             Token.OperatorType.BITWISE_OR -> IrNode.BitwiseOrNode(leftIrNode, rightIrNode)
             Token.OperatorType.LEFT_SHIFT -> IrNode.LeftShiftNode(leftIrNode, rightIrNode)
             Token.OperatorType.RIGHT_SHIFT -> IrNode.RightShiftNode(leftIrNode, rightIrNode)
-            Token.OperatorType.LOGICAL_AND -> IrNode.LogicalAndNode(leftIrNode, rightIrNode)
-            Token.OperatorType.LOGICAL_OR -> IrNode.LogicalOrNode(leftIrNode, rightIrNode)
             else -> error("Unsupported operator type: ${binaryOperationAstNode.operatorType}")
         }
 
         return Triple(irNode, newSideEffectNode2, newControlNode2)
+    }
+
+    context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
+    private fun createLogicalBinaryOperationIrNode(
+        astNode: AstNode.BinaryOperationNode,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): ExpressionReturn {
+        require(astNode.operatorType == Token.OperatorType.LOGICAL_AND || astNode.operatorType == Token.OperatorType.LOGICAL_OR)
+        
+        val (leftIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.left, lastSideEffectNode, lastControlNode)
+
+        val ifNode = IrNode.IfNode(leftIrNode, newControlNode)
+
+        val trueProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.TRUE_BRANCH)
+        val falseProjectionNode = IrNode.IfProjectionNode(ifNode, IrNode.IfProjectionType.FALSE_BRANCH)
+
+        val (branchToCheck, shortCircuitBranch) = when (astNode.operatorType) {
+            Token.OperatorType.LOGICAL_AND -> trueProjectionNode to falseProjectionNode
+            Token.OperatorType.LOGICAL_OR -> falseProjectionNode to trueProjectionNode
+            else -> error("createLogicalBinaryOperationIrNode called with unsupported operator type: ${astNode.operatorType}")
+        }
+
+        val (rightIrNode, newSideEffectNode2, newControlNode2) = createIrNodeForExpression(astNode.right, newSideEffectNode, branchToCheck)
+        val regionNode = IrNode.RegionNode(shortCircuitBranch, newControlNode2)
+
+        val phiNode = IrNode.PhiNode(SymbolName.InternalVariable("shortcircuit_result"), leftIrNode, rightIrNode, regionNode)
+        val sideEffectNode = if (newSideEffectNode == newSideEffectNode2) {
+            newSideEffectNode
+        } else {
+            IrNode.SideEffectPhiNode(newSideEffectNode, newSideEffectNode2, regionNode)
+        }
+
+        return Triple(phiNode, sideEffectNode, regionNode)
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
@@ -191,10 +227,12 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 val divNode = IrNode.DivNode(left, right, sideEffectNode)
                 divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
             }
+
             Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
                 val modNode = IrNode.ModNode(left, right, sideEffectNode)
                 modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
             }
+
             else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
         }
 
