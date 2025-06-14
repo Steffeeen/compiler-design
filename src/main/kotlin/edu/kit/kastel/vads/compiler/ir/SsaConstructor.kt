@@ -16,7 +16,7 @@ fun buildIr(program: AstNode.ProgramNode): IrProgram {
 context(compilerOptions: CompilerOptions)
 private fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions).buildIr(function)
 
-private typealias StatementReturn = Pair<IrNode.SideEffectNode, IrNode.ControlNode>
+private typealias StatementReturn = Pair<IrNode.SideEffectNode?, IrNode.ControlNode?>
 private typealias ExpressionReturn = Triple<IrNode.DataNode, IrNode.SideEffectNode, IrNode.ControlNode>
 
 private data class LoopScopes(
@@ -36,7 +36,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             }
         }
 
-        val endNode = IrNode.EndNode(returnNodes, sideEffectNode, controlNode)
+        val endNode = IrNode.EndNode(returnNodes, sideEffectNode!!, controlNode!!)
         return IrGraph(endNode, function.name.name.asString())
     }
 
@@ -118,7 +118,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         lastControlNode: IrNode.ControlNode
     ): ExpressionReturn {
         require(astNode.operatorType == Token.OperatorType.LOGICAL_AND || astNode.operatorType == Token.OperatorType.LOGICAL_OR)
-        
+
         val (leftIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.left, lastSideEffectNode, lastControlNode)
 
         val ifNode = IrNode.IfNode(leftIrNode, newControlNode)
@@ -135,7 +135,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val (rightIrNode, newSideEffectNode2, newControlNode2) = createIrNodeForExpression(astNode.right, newSideEffectNode, branchToCheck)
         val regionNode = IrNode.RegionNode(shortCircuitBranch, newControlNode2)
 
-        val phiNode = IrNode.PhiNode(SymbolName.InternalVariable("shortcircuit_result"), leftIrNode, rightIrNode, regionNode)
+        val name = SymbolName.InternalVariable("shortcircuit_result")
+        val phiNode = IrNode.PhiNode(name, leftIrNode, lastControlNode, rightIrNode, branchToCheck, regionNode)
         val sideEffectNode = if (newSideEffectNode == newSideEffectNode2) {
             newSideEffectNode
         } else {
@@ -201,7 +202,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val phiNode = IrNode.PhiNode(
             SymbolName.InternalVariable("ternary_result"),
             trueExpressionNode,
+            trueProjectionNode,
             falseExpressionNode,
+            falseProjectionNode,
             regionNode
         )
 
@@ -264,7 +267,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             val statements = getStatementsUntilFirstControlFlowEndingStatement(blockNode.statements)
 
             statements.fold(Pair(lastSideEffectNode, lastControlNode)) { (sideEffectNode, controlNode), statement ->
-                createIrNodeForStatement(statement, sideEffectNode, controlNode)
+                val (newSideEffect, newControl) = createIrNodeForStatement(statement, sideEffectNode, controlNode)
+                newSideEffect!! to newControl!!
             }
         }
 
@@ -318,39 +322,57 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             Triple(newSideEffectNode, falseProjectionNode, scopeNode)
         }
 
-        val isInLoopAndBodyContainsContinueStatement = loopScopes.loopRegionNode?.backEdge == trueProjectionNode
-        if (bodyControlNode == trueProjectionNode && elseControlNode == falseProjectionNode && !isInLoopAndBodyContainsContinueStatement) {
-            // Only create the region node if the control flows have not diverged.
-            // The control flow can diverge if any of the branches contains a return, break, or continue statement.
-            val regionNode = IrNode.RegionNode(bodyControlNode, elseControlNode)
+        val bodyHasControlFlowRelevantStatement = bodyControlNode == loopScopes.bodyControlNode || bodyControlNode == loopScopes.afterLoopControlNode
+        val elseHasControlFlowRelevantStatement = elseControlNode == loopScopes.bodyControlNode || elseControlNode == loopScopes.afterLoopControlNode
 
-            val newSideEffectNode2 = if (bodySideEffectNode != elseSideEffectNode) {
-                IrNode.SideEffectPhiNode(bodySideEffectNode, elseSideEffectNode, regionNode)
-            } else {
-                bodySideEffectNode
-            }
-
-            val differingDefinitions = bodyScopeNode.merge(elseScopeNode)
-
+        fun updateVariables(scopeNodeOfBranch: IrNode.ScopeNode) {
+            val differingDefinitions = scopeNode.merge(scopeNodeOfBranch)
             for ((variableName, definitions) in differingDefinitions.entries) {
-                val phiNode = IrNode.PhiNode(variableName, definitions.first, definitions.second, regionNode)
-                writeVariable(variableName, phiNode)
+                writeVariable(variableName, definitions.second)
+            }
+        }
+
+        return when {
+            bodyHasControlFlowRelevantStatement && elseHasControlFlowRelevantStatement -> {
+                // Both branches transfer the control else where because they contain a statement that influences control flow such as a return, break, or continue statement.
+                // We thus have no side effects and no control flow
+                null to null
             }
 
-            return newSideEffectNode2 to regionNode
-        }
+            bodyHasControlFlowRelevantStatement -> {
+                updateVariables(elseScopeNode)
 
-        if (bodyControlNode == trueProjectionNode) {
-            // If the body control node is the true projection node, the body did not contain a control flow ending statement.
-            return bodySideEffectNode to trueProjectionNode
-        }
+                // Only the body branch transfers the control else where, thus we return the body control node and the side effect node of the body
+                elseSideEffectNode to elseControlNode
+            }
 
-        if (elseControlNode == falseProjectionNode) {
-            // If the else control node is the false projection node, the else did not contain a control flow ending statement.
-            return elseSideEffectNode to falseProjectionNode
-        }
+            elseHasControlFlowRelevantStatement -> {
+                updateVariables(bodyScopeNode)
 
-        TODO("can this happen?")
+                // Only the else branch transfers the control else where, thus we return the else control node and the side effect node of the else
+                bodySideEffectNode to bodyControlNode
+            }
+
+            else -> {
+                // Neither branch transfers the control else where, we thus merge the data, the side effects, and the control flow of both branches.
+                val regionNode = IrNode.RegionNode(bodyControlNode!!, elseControlNode!!)
+
+                val newSideEffectNode2 = if (bodySideEffectNode != elseSideEffectNode) {
+                    IrNode.SideEffectPhiNode(bodySideEffectNode!!, elseSideEffectNode!!, regionNode)
+                } else {
+                    bodySideEffectNode
+                }
+
+                val differingDefinitions = bodyScopeNode.merge(elseScopeNode)
+
+                for ((variableName, definitions) in differingDefinitions.entries) {
+                    val phiNode = IrNode.PhiNode(variableName, definitions.first, bodyControlNode, definitions.second, elseControlNode, regionNode)
+                    writeVariable(variableName, phiNode)
+                }
+
+                return newSideEffectNode2 to regionNode
+            }
+        }
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
@@ -365,7 +387,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             bodySideEffectNode to afterLoopControlNode
         }
 
-        updatePhisAtLoopEnd(incompletePhis, whileScopeNode)
+        updatePhisAtLoopEnd(incompletePhis, whileScopeNode, loopRegion)
 
         return result
     }
@@ -380,24 +402,27 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             lastSideEffectNode to lastControlNode
         }
 
-        val loopRegion = IrNode.LoopRegionNode(newControlNode, null)
+        val loopRegion = IrNode.LoopRegionNode(newControlNode!!, null)
         val forScopeNode = scopeNode.duplicate()
         val incompletePhis = createInCompletePhis(astNode, forScopeNode, loopRegion)
 
         // Create the condition and body
         val result = with(forScopeNode) {
-            val (bodySideEffectNode, bodyControlNode, afterLoopControlNode) = createLoopConditionAndBody(astNode.condition, astNode.body, newSideEffectNode, loopRegion)
+            val (bodySideEffectNode, bodyControlNode, afterLoopControlNode) = createLoopConditionAndBody(astNode.condition, astNode.body, newSideEffectNode!!, loopRegion)
+
+            val newBodySideEffectNode = bodySideEffectNode ?: newSideEffectNode
+            val newBodyControlNode = bodyControlNode ?: loopRegion
 
             // Handle the increment statement
             if (astNode.increment != null) {
-                val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
+                val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, newBodySideEffectNode, newBodyControlNode)
                 incrementSideEffectNode to afterLoopControlNode
             } else {
                 bodySideEffectNode to afterLoopControlNode
             }
         }
 
-        updatePhisAtLoopEnd(incompletePhis, forScopeNode)
+        updatePhisAtLoopEnd(incompletePhis, forScopeNode, loopRegion)
 
         return result
     }
@@ -411,7 +436,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val incompletePhis = mutableListOf<IrNode.PhiNode>()
         for (variableName in writtenAndReadVariables) {
             val currentValue = readVariable(variableName)
-            val incompletePhiNode = IrNode.PhiNode(variableName, currentValue, null, loopRegion)
+            val incompletePhiNode = IrNode.PhiNode(variableName, currentValue, loopRegion.entryPoint, null, null, loopRegion)
             incompletePhis.add(incompletePhiNode)
             with(loopScopeNode) { writeVariable(variableName, incompletePhiNode) }
         }
@@ -439,7 +464,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         body: AstNode.StatementNode,
         lastSideEffectNode: IrNode.SideEffectNode,
         loopRegion: IrNode.LoopRegionNode
-    ): Triple<IrNode.SideEffectNode, IrNode.ControlNode, IrNode.ControlNode> {
+    ): Triple<IrNode.SideEffectNode?, IrNode.ControlNode?, IrNode.ControlNode> {
         val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(condition, lastSideEffectNode, loopRegion)
         val loopEntryNode = IrNode.IfNode(conditionNode, newControlNode)
         val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
@@ -450,11 +475,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             createIrNodeForStatement(body, newSideEffectNode, trueProjectionNode)
         }
 
-        loopRegion.backEdge = if (loopRegion.backEdge == trueProjectionNode) {
-            // There are no continue statements in the loop body, set the normal back edge
+        loopRegion.backEdge = if (loopRegion.backEdge == null) {
+            // If there is no back edge yet, we set the back edge to the body control node
             bodyControlNode
         } else {
-            // There are continue statements in the loop body, create a region node to merge the continue statements' control flow and the normal back edge
+            // If there is already a back edge, we create a region node to merge the control flow with the previous continue statements
             IrNode.RegionNode(loopRegion.backEdge!!, bodyControlNode)
         }
 
@@ -462,12 +487,13 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     }
 
     context(scopeNode: IrNode.ScopeNode, loopScopes: LoopScopes)
-    private fun updatePhisAtLoopEnd(incompletePhis: List<IrNode.PhiNode>, loopScopeNode: IrNode.ScopeNode) {
+    private fun updatePhisAtLoopEnd(incompletePhis: List<IrNode.PhiNode>, loopScopeNode: IrNode.ScopeNode, loopRegion: IrNode.LoopRegionNode) {
         // Update the incomplete phi nodes with the values of the variables at the end of the loop body
         for (incompletePhiNode in incompletePhis) {
             val value = with(loopScopeNode) { readVariable(incompletePhiNode.name) }
             require(value != incompletePhiNode)
             incompletePhiNode.second = value
+            incompletePhiNode.secondControl = loopRegion
             writeVariable(incompletePhiNode.name, incompletePhiNode)
         }
     }

@@ -10,12 +10,14 @@ private enum class EdgeType {
     DATA,
     SIDE_EFFECT,
     CONTROL,
+    PHI_CONTROL_INFO
 }
 
 private fun EdgeType.color(): String = when (this) {
     EdgeType.DATA -> "black"
     EdgeType.SIDE_EFFECT -> "blue"
     EdgeType.CONTROL -> "red"
+    EdgeType.PHI_CONTROL_INFO -> "green"
 }
 
 private data class GraphBuilder(
@@ -38,6 +40,13 @@ private data class GraphBuilder(
         if (createdEdges.contains(fromId to toId)) return
         createdEdges.add(fromId to toId)
         edgeBuilder.appendIndented("$fromId -> $toId [color=\"${type.color()}\"];")
+    }
+
+    fun addNamedEdge(fromId: Int, toId: Int, name: String, type: EdgeType = EdgeType.DATA) {
+        if (fromId == toId) return
+        if (createdEdges.contains(fromId to toId)) return
+        createdEdges.add(fromId to toId)
+        edgeBuilder.appendIndented("$fromId -> $toId [label=\"$name\", color=\"${type.color()}\"];")
     }
 }
 
@@ -87,6 +96,10 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
 
     if (node is IrNode.PhiNode) {
         addEdge(nodeId, printNode(node.region), EdgeType.CONTROL)
+        addNamedEdge(printNode(node.first), nodeId, "first")
+        addNamedEdge(printNode(node.second!!), nodeId, "second")
+        addNamedEdge(printNode(node.firstControl), nodeId, "firstControl", EdgeType.PHI_CONTROL_INFO)
+        addNamedEdge(printNode(node.secondControl!!), nodeId, "secondControl", EdgeType.PHI_CONTROL_INFO)
         node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
         return nodeId
     }

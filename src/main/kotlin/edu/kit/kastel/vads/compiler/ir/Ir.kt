@@ -133,7 +133,8 @@ sealed interface IrNode {
             get() = backEdge
     }
 
-    class PhiNode(val name: SymbolName, val first: DataNode, var second: DataNode?, val region: RegionNode) : DataNode {
+    class PhiNode(val name: SymbolName, val first: DataNode, val firstControl: ControlNode, var second: DataNode?, var secondControl: ControlNode?, val region: RegionNode) :
+        DataNode {
         override val dataInputs: List<DataNode> get() = listOfNotNull(first, second)
     }
 
