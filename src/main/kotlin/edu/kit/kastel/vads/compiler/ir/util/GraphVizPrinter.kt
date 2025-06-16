@@ -73,8 +73,11 @@ private fun StringBuilder.print(graph: IrGraph) {
     val graphBuilder = GraphBuilder()
     with(graphBuilder) {
         val nodeId = ensureNodeExists(graph.endNode)
-        addEdge(printNode(graph.endNode.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
-        graph.endNode.returnNodes.forEach { addEdge(printNode(it), nodeId, EdgeType.CONTROL) }
+        for (returnNode in graph.endNode.returnNodes) {
+            val returnNodeId = printNode(returnNode)
+            addEdge(returnNodeId, nodeId, EdgeType.CONTROL)
+            addEdge(returnNodeId, nodeId, EdgeType.SIDE_EFFECT)
+        }
     }
     appendLine()
     append(graphBuilder.nodeBuilder)
@@ -111,6 +114,9 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
     }
 
     if (node is IrNode.DataNode) {
+        node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
+    }
+    if (node is IrNode.DataNodeConsumingNode) {
         node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
     }
     if (node is IrNode.SideEffectRelevantNode) {

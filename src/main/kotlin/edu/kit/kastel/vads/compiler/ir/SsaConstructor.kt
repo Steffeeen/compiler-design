@@ -30,13 +30,13 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
     fun buildIr(function: AstNode.FunctionNode): IrGraph {
         val scopeNode = IrNode.ScopeNode()
-        val (sideEffectNode, controlNode) = with(scopeNode) {
+        with(scopeNode) {
             with(LoopScopes()) {
                 createIrNodeForStatement(function.body, IrNode.StartNode, IrNode.StartNode)
             }
         }
 
-        val endNode = IrNode.EndNode(returnNodes, sideEffectNode!!, controlNode!!)
+        val endNode = IrNode.EndNode(returnNodes)
         return IrGraph(endNode, function.name.name.asString())
     }
 
@@ -275,7 +275,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return newSideEffectNode
     }
 
-    private fun createLiteralIrNode(literalAstNode: AstNode.LiteralNode): IrNode.ConstantNode {
+    private fun createLiteralIrNode(literalAstNode: AstNode.LiteralNode): IrNode.ConstantNode<*> {
         return when (literalAstNode) {
             is AstNode.BooleanLiteralNode -> IrNode.BooleanConstantNode(literalAstNode.value)
             is AstNode.IntLiteralNode -> IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
