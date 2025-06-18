@@ -38,7 +38,6 @@ class NamespaceStack<T> {
     }
 
     fun merge(other: NamespaceStack<T>): Map<SymbolName, Pair<T, T>> {
-        require(namespaces.size == other.namespaces.size) { "Cannot merge namespaces with different sizes" }
         val allKeysInThisScope = getAll().keys
         val allKeysInOtherScope = other.getAll().keys
         require(allKeysInThisScope == allKeysInOtherScope) { "Cannot merge namespaces with different keys" }

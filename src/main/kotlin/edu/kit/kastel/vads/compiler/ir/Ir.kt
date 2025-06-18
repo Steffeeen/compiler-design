@@ -62,7 +62,7 @@ sealed interface IrNode {
 
     object StartNode : SideEffectNode, ControlNode
 
-    data class EndNode(val returnNodes: List<ReturnNode>, override val sideEffect: SideEffectNode, override val control: ControlNode) : SideEffectRelevantNode, ControlRelevantNode
+    data class EndNode(val returnNodes: List<ReturnNode>) : ControlNode, SideEffectNode
 
     class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 

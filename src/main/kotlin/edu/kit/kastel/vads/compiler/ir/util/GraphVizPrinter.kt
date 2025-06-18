@@ -73,8 +73,11 @@ private fun StringBuilder.print(graph: IrGraph) {
     val graphBuilder = GraphBuilder()
     with(graphBuilder) {
         val nodeId = ensureNodeExists(graph.endNode)
-        addEdge(printNode(graph.endNode.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
-        graph.endNode.returnNodes.forEach { addEdge(printNode(it), nodeId, EdgeType.CONTROL) }
+        graph.endNode.returnNodes.forEach {
+            val returnNodeId = printNode(it)
+            addEdge(returnNodeId, nodeId, EdgeType.CONTROL)
+            addEdge(returnNodeId, nodeId, EdgeType.SIDE_EFFECT)
+        }
     }
     appendLine()
     append(graphBuilder.nodeBuilder)
