@@ -416,44 +416,26 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
         val (bodySideEffectNode, bodyControlNode) = result
 
+        updatePhisAtLoopEnd(incompletePhis, loopInformation)
+
         // Handle the increment statement
         if (astNode.increment != null && bodySideEffectNode != null && bodyControlNode != null) {
             val loopVariableName = ((astNode.increment as AstNode.AssignmentNode).lValue as AstNode.LValueIdentifierNode).name.name
             val loopVariableIncompletePhi = incompletePhis.find { it.name == loopVariableName }!!
-            val loopVariableIsUpdatedInBody = forScopeNode[loopVariableName] != loopVariableIncompletePhi
 
-            if (loopVariableIsUpdatedInBody) {
-                // If the loop variable is updated in the body, we remove the original phi node for the loop variable from the incomplete phis
-                // as we will manually set the second input to the result of the increment operation.
-                // We insert a new placeholder phi node that will only get its second input set,
-                // we will then remove this phi node again and use the input to that phi node as the input for the increment operation.
-                val placeholderPhiNode = IrNode.PhiNode(SymbolName.InternalVariable("placeholder"), IrNode.IntegerConstantNode(0u), bodyControlNode, null, null, loopRegion)
-
-                val patchedIncompletePhis = (incompletePhis - loopVariableIncompletePhi) + placeholderPhiNode
-                updatePhisAtLoopEnd(patchedIncompletePhis, loopInformation)
-
-                val (loopVariableDataNodeAfterIncrement, sideEffectNode) = with(forScopeNode.duplicate()) {
-                    writeVariable(loopVariableName, placeholderPhiNode.second!!)
-                    // Discard the control node as the increment operation does not influence control flow
-                    val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
-                    readVariable(loopVariableName) to incrementSideEffectNode
-                }
-                loopVariableIncompletePhi.second = loopVariableDataNodeAfterIncrement
+            if (loopVariableIncompletePhi.second == null) {
+                // loop variable not updated in loop
+                // TODO: handle side effect
+                val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
+                loopVariableIncompletePhi.second = readVariable(loopVariableName)
                 loopVariableIncompletePhi.secondControl = loopRegion
-                // TODO: properly propagate side effects
             } else {
-                updatePhisAtLoopEnd(incompletePhis - loopVariableIncompletePhi, loopInformation)
-                val (loopVariableDataNodeAfterIncrement, sideEffectNode) = with(forScopeNode.duplicate()) {
-                    // Discard the control node as the increment operation does not influence control flow
-                    val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
-                    readVariable(loopVariableName) to incrementSideEffectNode
-                }
-                loopVariableIncompletePhi.second = loopVariableDataNodeAfterIncrement
+                writeVariable(loopVariableName, loopVariableIncompletePhi.second!!)
+                // TODO: handle side effect
+                val (incrementSideEffectNode, _) = createIrNodeForStatement(astNode.increment, bodySideEffectNode, bodyControlNode)
+                loopVariableIncompletePhi.second = readVariable(loopVariableName)
                 loopVariableIncompletePhi.secondControl = loopRegion
-                // TODO: properly propagate side effects
             }
-        } else {
-            updatePhisAtLoopEnd(incompletePhis, loopInformation)
         }
 
         // We need to merge the scope nodes of all branches that lead to the end of the loop.
