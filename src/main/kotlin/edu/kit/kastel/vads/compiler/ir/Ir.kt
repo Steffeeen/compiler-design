@@ -1,7 +1,6 @@
 package edu.kit.kastel.vads.compiler.ir
 
 import edu.kit.kastel.vads.compiler.parser.SymbolName
-import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
 enum class SideEffectType {
     DIVISION_BY_ZERO_EXCEPTION
@@ -27,37 +26,6 @@ sealed interface IrNode {
 
     sealed interface ControlRelevantNode : ControlNode {
         val control: ControlNode
-    }
-
-    open class ScopeNode : IrNode {
-        protected val symbolTable: NamespaceStack<DataNode>
-
-        constructor() {
-            this.symbolTable = NamespaceStack<DataNode>()
-        }
-
-        protected constructor(symbolTable: NamespaceStack<DataNode>) {
-            this.symbolTable = symbolTable
-        }
-
-        open fun duplicate(): ScopeNode {
-            return ScopeNode(this.symbolTable.duplicate())
-        }
-
-        fun merge(other: ScopeNode): Map<SymbolName, Pair<DataNode, DataNode>> {
-            return symbolTable.merge(other.symbolTable)
-        }
-
-        open operator fun set(name: SymbolName, value: DataNode) {
-            symbolTable[name] = value
-        }
-
-        open operator fun get(name: SymbolName): DataNode? = symbolTable[name]
-
-        fun pushNamespace() = symbolTable.pushNamespace()
-        fun popNamespace() = symbolTable.popNamespace()
-
-        fun getAll() = symbolTable.getAll()
     }
 
     object StartNode : SideEffectNode, ControlNode

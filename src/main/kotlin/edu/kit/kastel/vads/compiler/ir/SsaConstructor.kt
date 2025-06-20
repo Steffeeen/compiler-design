@@ -6,6 +6,7 @@ import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.SymbolName
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
+import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
 context(compilerOptions: CompilerOptions)
 fun buildIr(program: AstNode.ProgramNode): IrProgram {
@@ -19,20 +20,22 @@ private fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(co
 private typealias StatementReturn = Pair<IrNode.SideEffectNode?, IrNode.ControlNode?>
 private typealias ExpressionReturn = Triple<IrNode.DataNode, IrNode.SideEffectNode, IrNode.ControlNode>
 
+private typealias SymbolTable = NamespaceStack<IrNode.DataNode>
+
 private val CONTROL_FLOW_END = Pair(null, null)
 
 private class LoopInformation(val loopRegion: IrNode.LoopRegionNode) {
-    private var _backEdges = mutableListOf<Triple<IrNode.ControlNode, IrNode.SideEffectNode, IrNode.ScopeNode>>()
-    private var _afterLoopEdges = mutableListOf<Triple<IrNode.ControlNode, IrNode.SideEffectNode, IrNode.ScopeNode>>()
+    private var _backEdges = mutableListOf<Triple<IrNode.ControlNode, IrNode.SideEffectNode, SymbolTable>>()
+    private var _afterLoopEdges = mutableListOf<Triple<IrNode.ControlNode, IrNode.SideEffectNode, SymbolTable>>()
 
     val backEdges get() = _backEdges
     val afterLoopEdges get() = _afterLoopEdges
 
-    fun addBackEdge(controlNode: IrNode.ControlNode, sideEffectNode: IrNode.SideEffectNode, scopeNode: IrNode.ScopeNode): Boolean {
+    fun addBackEdge(controlNode: IrNode.ControlNode, sideEffectNode: IrNode.SideEffectNode, scopeNode: SymbolTable): Boolean {
         return backEdges.add(Triple(controlNode, sideEffectNode, scopeNode))
     }
 
-    fun addAfterLoopEdge(controlNode: IrNode.ControlNode, sideEffectNode: IrNode.SideEffectNode, scopeNode: IrNode.ScopeNode): Boolean {
+    fun addAfterLoopEdge(controlNode: IrNode.ControlNode, sideEffectNode: IrNode.SideEffectNode, scopeNode: SymbolTable): Boolean {
         return afterLoopEdges.add(Triple(controlNode, sideEffectNode, scopeNode))
     }
 }
@@ -43,7 +46,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     private val currentLoopInformation get() = loopStack.last()
 
     fun buildIr(function: AstNode.FunctionNode): IrGraph {
-        val scopeNode = IrNode.ScopeNode()
+        val scopeNode = SymbolTable()
         val (sideEffectNode, controlNode) = with(scopeNode) {
             createIrNodeForStatement(function.body, IrNode.StartNode, IrNode.StartNode)
         }
@@ -52,7 +55,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return IrGraph(endNode, function.name.name.asString())
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createIrNodeForStatement(astNode: AstNode.StatementNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         return when (astNode) {
             is AstNode.AssignmentNode -> handleAssignmentNode(astNode, lastSideEffectNode, lastControlNode)
@@ -67,7 +70,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createIrNodeForExpression(astNode: AstNode.ExpressionNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
         return when (astNode) {
             is AstNode.BinaryOperationNode -> createBinaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
@@ -78,7 +81,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createBinaryOperationIrNode(
         binaryOperationAstNode: AstNode.BinaryOperationNode,
         lastSideEffectNode: IrNode.SideEffectNode,
@@ -123,7 +126,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(irNode, newSideEffectNode2, newControlNode2)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createLogicalBinaryOperationIrNode(
         astNode: AstNode.BinaryOperationNode,
         lastSideEffectNode: IrNode.SideEffectNode,
@@ -158,7 +161,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(phiNode, sideEffectNode, regionNode)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleIdentifierExpressionNode(
         identifierAstNode: AstNode.IdentifierExpressionNode,
         lastSideEffectNode: IrNode.SideEffectNode,
@@ -169,7 +172,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(irNode, lastSideEffectNode, lastControlNode)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createUnaryOperationIrNode(
         unaryOperationNode: AstNode.UnaryOperationNode,
         lastSideEffectNode: IrNode.SideEffectNode,
@@ -186,7 +189,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(unaryOperationIrNode, newSideEffectNode, newControlNode)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleTernaryOperationNode(
         ternaryOperationNode: AstNode.TernaryOperationNode,
         lastSideEffectNode: IrNode.SideEffectNode,
@@ -231,7 +234,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(phiNode, newSideEffectNode2, regionNode)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleAssignmentNode(assignmentNode: AstNode.AssignmentNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         val desugar: ((IrNode.DataNode, IrNode.DataNode, IrNode.SideEffectNode) -> Pair<IrNode.DataNode, IrNode.SideEffectNode>)? = when (assignmentNode.operator) {
             Token.OperatorType.ASSIGN -> null
@@ -262,7 +265,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleDeclarationNode(declarationNode: AstNode.DeclarationNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         if (declarationNode.initializer == null) {
             return lastSideEffectNode to lastControlNode
@@ -273,7 +276,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return newSideEffectNode to newControlNode
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleBlockNode(blockNode: AstNode.BlockNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         return createNamespace {
             val statements = getStatementsUntilFirstControlFlowEndingStatement(blockNode.statements)
@@ -292,7 +295,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleReturnNode(astNode: AstNode.ReturnNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         val (expressionIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode, lastControlNode)
         val returnNode = IrNode.ReturnNode(expressionIrNode, newSideEffectNode, newControlNode)
@@ -300,7 +303,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return CONTROL_FLOW_END
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleIfNode(astNode: AstNode.IfNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.condition, lastSideEffectNode, lastControlNode)
         val ifNode = IrNode.IfNode(conditionNode, newControlNode)
@@ -369,7 +372,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleWhileNode(astNode: AstNode.WhileNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         val loopRegion = IrNode.LoopRegionNode(lastControlNode, null)
         val whileScopeNode = scopeNode.duplicate()
@@ -394,7 +397,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return sideEffectNode to controlNode
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleForNode(astNode: AstNode.ForNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         // The for loop is desugared to a while loop with the initializer as a statement before the while loop.
         // The increment is executed at the end of the loop body.
@@ -449,8 +452,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return sideEffectNode to controlNode
     }
 
-    context(scopeNode: IrNode.ScopeNode)
-    private fun mergeDefinitions(edges: List<Triple<IrNode.ControlNode, IrNode.SideEffectNode, IrNode.ScopeNode>>): Triple<Map<SymbolName, Pair<IrNode.DataNode, IrNode.ControlNode>>, IrNode.SideEffectNode, IrNode.ControlNode> {
+    context(scopeNode: SymbolTable)
+    private fun mergeDefinitions(edges: List<Triple<IrNode.ControlNode, IrNode.SideEffectNode, SymbolTable>>): Triple<Map<SymbolName, Pair<IrNode.DataNode, IrNode.ControlNode>>, IrNode.SideEffectNode, IrNode.ControlNode> {
         require(edges.isNotEmpty())
 
         if (edges.size == 1) {
@@ -500,8 +503,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return Triple(result, currentSideEffectNode, currentRegionNode)
     }
 
-    context(scopeNode: IrNode.ScopeNode)
-    private fun createInCompletePhis(statement: AstNode.StatementNode, loopScopeNode: IrNode.ScopeNode, loopRegion: IrNode.LoopRegionNode): List<IrNode.PhiNode> {
+    context(scopeNode: SymbolTable)
+    private fun createInCompletePhis(statement: AstNode.StatementNode, loopScopeNode: SymbolTable, loopRegion: IrNode.LoopRegionNode): List<IrNode.PhiNode> {
         // Create incomplete phis for all variables that are written in the loop body
         val writtenVariables = findWrittenVariablesInStatement(statement)
         val writtenAndReadVariables = writtenVariables.intersect(scopeNode.getAll().keys)
@@ -531,7 +534,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return writtenVariables
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun createLoopConditionAndBody(condition: AstNode.ExpressionNode, body: AstNode.StatementNode, lastSideEffectNode: IrNode.SideEffectNode): StatementReturn {
         val (conditionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(condition, lastSideEffectNode, currentLoopInformation.loopRegion)
         val loopEntryNode = IrNode.IfNode(conditionNode, newControlNode)
@@ -547,7 +550,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         return result
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun updatePhisAtLoopEnd(incompletePhis: List<IrNode.PhiNode>, loopInformation: LoopInformation) {
         // TODO: do we need the side effect node?
         val (variableInfo, _, controlNode) = mergeDefinitions(loopInformation.backEdges)
@@ -562,29 +565,29 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleBreakNode(lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         currentLoopInformation.addAfterLoopEdge(lastControlNode, lastSideEffectNode, scopeNode)
         return CONTROL_FLOW_END
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun handleContinueNode(lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         currentLoopInformation.addBackEdge(lastControlNode, lastSideEffectNode, scopeNode)
         return CONTROL_FLOW_END
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun writeVariable(variableName: SymbolName, value: IrNode.DataNode) {
         scopeNode[variableName] = value
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private fun readVariable(variableName: SymbolName): IrNode.DataNode {
         return scopeNode[variableName]!!
     }
 
-    context(scopeNode: IrNode.ScopeNode)
+    context(scopeNode: SymbolTable)
     private inline fun <T> createNamespace(block: () -> T): T {
         scopeNode.pushNamespace()
         val result = block()
