@@ -47,7 +47,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
     fun buildIr(function: AstNode.FunctionNode): IrGraph {
         val scopeNode = SymbolTable()
-        val (sideEffectNode, controlNode) = with(scopeNode) {
+        with(scopeNode) {
             createIrNodeForStatement(function.body, IrNode.StartNode, IrNode.StartNode)
         }
 
@@ -225,7 +225,6 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
         val newSideEffectNode2 = if (trueExpressionSideEffectNode == falseExpressionSideEffectNode) {
             require(trueExpressionSideEffectNode == newSideEffectNode)
-            // If both branches have the same side effect, they both don't have side effects so we just don't need to create a side effect phi node
             newSideEffectNode
         } else {
             IrNode.SideEffectPhiNode(trueExpressionSideEffectNode, falseExpressionSideEffectNode, regionNode)
@@ -385,16 +384,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
 
         updatePhisAtLoopEnd(incompletePhis, loopInformation)
-
-        // We need to merge the scope nodes of all branches that lead to the end of the loop.
-        // This can, however, not be done one after the other, as for example, the first and third scope could only have changes for a variable
-        val (variableInfo, sideEffectNode, controlNode) = mergeDefinitions(loopInformation.afterLoopEdges)
-        for ((variableName, nodes) in variableInfo) {
-            val (dataNode, _) = nodes
-            writeVariable(variableName, dataNode)
-        }
-
-        return sideEffectNode to controlNode
+        return mergeAfterLoopEdges(loopInformation)
     }
 
     context(scopeNode: SymbolTable)
@@ -441,17 +431,14 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             }
         }
 
-        // We need to merge the scope nodes of all branches that lead to the end of the loop.
-        // This can, however, not be done one after the other, as for example, the first and third scope could only have changes for a variable
-        val (variableInfo, sideEffectNode, controlNode) = mergeDefinitions(loopInformation.afterLoopEdges)
-        for ((variableName, nodes) in variableInfo) {
-            val (dataNode, _) = nodes
-            writeVariable(variableName, dataNode)
-        }
-
-        return sideEffectNode to controlNode
+        return mergeAfterLoopEdges(loopInformation)
     }
 
+    /**
+     * Merges the definitions of multiple edges.
+     * The control flow gets merged using region nodes.
+     * For all variables, the values that differ are merged using phi nodes.
+     */
     context(scopeNode: SymbolTable)
     private fun mergeDefinitions(edges: List<Triple<IrNode.ControlNode, IrNode.SideEffectNode, SymbolTable>>): Triple<Map<SymbolName, Pair<IrNode.DataNode, IrNode.ControlNode>>, IrNode.SideEffectNode, IrNode.ControlNode> {
         require(edges.isNotEmpty())
@@ -468,8 +455,6 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
         val alreadyMergedValues = mutableMapOf<SymbolName, MutableSet<IrNode.DataNode>>()
         val alreadyMergedSideEffects = mutableSetOf(firstSideEffectNode)
-        var currentRegionNode = firstControlNode
-        var currentSideEffectNode = firstSideEffectNode
 
         val result = mutableMapOf<SymbolName, Pair<IrNode.DataNode, IrNode.ControlNode>>()
 
@@ -479,6 +464,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             result[variableName] = firstEdgeValue to firstControlNode
             alreadyMergedValues.getOrPut(variableName) { mutableSetOf() }.add(firstEdgeValue)
         }
+
+        var currentRegionNode = firstControlNode
+        var currentSideEffectNode = firstSideEffectNode
 
         for ((edgeControlNode, sideEffectNode, edgeScopeNode) in edges.drop(1)) {
             currentRegionNode = IrNode.RegionNode(currentRegionNode, edgeControlNode)
@@ -564,6 +552,20 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             incompletePhiNode.secondControl = controlNode
         }
     }
+
+    context(scopeNode: SymbolTable)
+    private fun mergeAfterLoopEdges(loopInformation: LoopInformation): StatementReturn {
+        // We need to merge the scope nodes of all branches that lead to the end of the loop.
+        // This can, however, not be done one after the other, as for example, the first and third scope could only have changes for a variable
+        val (variableInfo, sideEffectNode, controlNode) = mergeDefinitions(loopInformation.afterLoopEdges)
+        for ((variableName, nodes) in variableInfo) {
+            val (dataNode, _) = nodes
+            writeVariable(variableName, dataNode)
+        }
+
+        return sideEffectNode to controlNode
+    }
+
 
     context(scopeNode: SymbolTable)
     private fun handleBreakNode(lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
