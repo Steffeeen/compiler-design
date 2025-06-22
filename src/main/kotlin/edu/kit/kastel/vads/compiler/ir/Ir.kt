@@ -16,6 +16,10 @@ sealed interface IrNode {
         val dataInputs: List<DataNode>
     }
 
+    sealed interface DataNodeConsumingNode : IrNode {
+        val dataInputs: List<DataNode>
+    }
+
     sealed interface SideEffectNode : IrNode
 
     sealed interface SideEffectRelevantNode : SideEffectNode {
@@ -30,7 +34,7 @@ sealed interface IrNode {
 
     object StartNode : SideEffectNode, ControlNode
 
-    data class EndNode(val returnNodes: List<ReturnNode>) : ControlNode, SideEffectNode
+    data class EndNode(val returnNodes: List<ReturnNode>) : IrNode
 
     class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 
@@ -71,20 +75,22 @@ sealed interface IrNode {
     class BitwiseNotNode(override val inNode: DataNode) : UnaryOperationNode
 
     // Constants
-    sealed interface ConstantNode : DataNode {
+    sealed interface ConstantNode<T> : DataNode {
+        val value: T
         override val dataInputs: List<DataNode> get() = listOf()
     }
 
-    data class IntegerConstantNode(val value: UInt) : ConstantNode
+    data class IntegerConstantNode(override val value: UInt) : ConstantNode<UInt>
 
-    data class BooleanConstantNode(val value: Boolean) : ConstantNode
+    data class BooleanConstantNode(override val value: Boolean) : ConstantNode<Boolean>
 
     // Control flow
-    class ReturnNode(val result: DataNode, override val sideEffect: SideEffectNode, override val control: ControlNode) : DataNode, SideEffectRelevantNode, ControlRelevantNode {
+    class ReturnNode(val result: DataNode, override val sideEffect: SideEffectNode, override val control: ControlNode) : DataNodeConsumingNode, SideEffectRelevantNode,
+        ControlRelevantNode {
         override val dataInputs: List<DataNode> = listOf(result)
     }
 
-    class IfNode(val condition: DataNode, override val control: ControlNode) : DataNode, ControlRelevantNode {
+    class IfNode(val condition: DataNode, override val control: ControlNode) : DataNodeConsumingNode, ControlRelevantNode {
         override val dataInputs: List<DataNode> = listOf(condition)
     }
 

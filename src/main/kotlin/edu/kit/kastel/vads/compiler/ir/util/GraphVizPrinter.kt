@@ -116,6 +116,9 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
     if (node is IrNode.DataNode) {
         node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
     }
+    if (node is IrNode.DataNodeConsumingNode) {
+        node.dataInputs.forEach { addEdge(printNode(it), nodeId) }
+    }
     if (node is IrNode.SideEffectRelevantNode) {
         addEdge(printNode(node.sideEffect), nodeId, EdgeType.SIDE_EFFECT)
     }

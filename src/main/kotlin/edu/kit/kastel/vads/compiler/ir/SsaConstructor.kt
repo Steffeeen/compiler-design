@@ -287,7 +287,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         }
     }
 
-    private fun createLiteralIrNode(literalAstNode: AstNode.LiteralNode): IrNode.ConstantNode {
+    private fun createLiteralIrNode(literalAstNode: AstNode.LiteralNode): IrNode.ConstantNode<*> {
         return when (literalAstNode) {
             is AstNode.BooleanLiteralNode -> IrNode.BooleanConstantNode(literalAstNode.value)
             is AstNode.IntLiteralNode -> IrNode.IntegerConstantNode(literalAstNode.parseValue()!!)
