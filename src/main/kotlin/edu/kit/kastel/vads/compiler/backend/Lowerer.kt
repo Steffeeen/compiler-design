@@ -15,6 +15,7 @@ private class Lowerer(private val irGraph: IrGraph) {
     private var registerCounter = 0
     private val nodesToRegisters: MutableMap<IrNode, AsmIr.Register> = mutableMapOf()
     private val generatedNodes: MutableSet<IrNode> = mutableSetOf()
+    private val dataNodesToInstructions: MutableMap<IrNode.DataNode, AsmIr.Instruction> = mutableMapOf()
     private val controlsToBlock: MutableMap<IrNode.ControlNode, BasicBlockBuilder> = mutableMapOf()
     private val successorInfo = SuccessorInfo(irGraph)
     private val finalReturnBlock = block(AsmIr.Label("final_return"))
@@ -22,6 +23,7 @@ private class Lowerer(private val irGraph: IrGraph) {
     fun lower(): AsmIr.Function {
         val startSuccessors = IrNode.StartNode.controlSuccessors()
 
+        // First, we create all the basic blocks from the sea of nodes.
         val startBlock = block(label(IrNode.StartNode))
         controlsToBlock[IrNode.StartNode] = startBlock
         with(startBlock) {
@@ -30,6 +32,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             }
         }
 
+        // Then we put all the data nodes into the blocks.
         val returnRegister = register(irGraph.endNode)
         finalReturnBlock.addLast(AsmIr.Return(returnRegister))
 
@@ -48,6 +51,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             block.setFinalJump(finalReturnBlock)
         }
 
+        // Finally, we put the data nodes for the conditions into the blocks.
         generateIfNodeConditions()
 
         return AsmIr.Function(irGraph.name, blocks.values.map { it.build() }, startBlock.build(), finalReturnBlock.build())
@@ -206,11 +210,15 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.BitwiseNotNode -> AsmIr.UnaryOperationType.BITWISE_NOT
         }
 
-        currentBlock.addFirst(AsmIr.UnaryOperation(unaryOperationType, destination, source))
 
         if (operation.inNode !is IrNode.ConstantNode<*>) {
             generateDataNode(operation.inNode, source as AsmIr.Register)
         }
+
+        val sourceInstruction = dataNodesToInstructions[operation.inNode]
+        val instruction = AsmIr.UnaryOperation(unaryOperationType, destination, source)
+        currentBlock.addFirst(instruction, setOfNotNull(sourceInstruction))
+        dataNodesToInstructions[operation] = instruction
     }
 
     context(currentBlock: BasicBlockBuilder)
@@ -237,8 +245,6 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.BitwiseOrNode -> AsmIr.BinaryOperationType.BITWISE_OR
         }
 
-        currentBlock.addFirst(AsmIr.BinaryOperation(binaryOperationType, destination, leftSource, rightSource))
-
         if (operation.left !is IrNode.ConstantNode<*>) {
             generateDataNode(operation.left, leftSource as AsmIr.Register)
         }
@@ -246,6 +252,12 @@ private class Lowerer(private val irGraph: IrGraph) {
         if (operation.right !is IrNode.ConstantNode<*>) {
             generateDataNode(operation.right, rightSource as AsmIr.Register)
         }
+
+        val leftInstruction = dataNodesToInstructions[operation.left]
+        val rightInstruction = dataNodesToInstructions[operation.right]
+        val instruction = AsmIr.BinaryOperation(binaryOperationType, destination, leftSource, rightSource)
+        currentBlock.addFirst(instruction, setOfNotNull(leftInstruction, rightInstruction))
+        dataNodesToInstructions[operation] = instruction
     }
 
     private fun block(label: AsmIr.Label): BasicBlockBuilder {
@@ -350,7 +362,10 @@ private class BasicBlockBuilder(val label: AsmIr.Label) {
     private val instructions: MutableList<AsmIr.Instruction> = mutableListOf()
     private var finalJump: AsmIr.Jump? = null
 
-    fun addFirst(instruction: AsmIr.Instruction) = instructions.addFirst(instruction)
+    fun addFirst(instruction: AsmIr.Instruction, ensureAfter: Set<AsmIr.Instruction> = setOf()) {
+        val insertionIndex = ensureAfter.maxOfOrNull { instructions.indexOf(it) }?.plus(1) ?: 0
+        instructions.add(insertionIndex, instruction)
+    }
     fun addLast(instruction: AsmIr.Instruction) = instructions.add(instruction)
     fun setFinalJump(block: BasicBlockBuilder) {
         finalJump = AsmIr.Jump(block.label)
