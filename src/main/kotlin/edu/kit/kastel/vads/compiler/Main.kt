@@ -7,8 +7,14 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.types.path
+import edu.kit.kastel.vads.compiler.backend.GraphColoringRegisterAllocator
+import edu.kit.kastel.vads.compiler.backend.X86Architecture
+import edu.kit.kastel.vads.compiler.backend.ir.asmIrToString
+import edu.kit.kastel.vads.compiler.backend.lowerIrToAsmIr
+import edu.kit.kastel.vads.compiler.backend.x86.X86Assembler
 import edu.kit.kastel.vads.compiler.backend.x86.X86Assembly
-import edu.kit.kastel.vads.compiler.backend.x86.generateX86Assembly
+import edu.kit.kastel.vads.compiler.backend.x86.X86CodeGenerator
+import edu.kit.kastel.vads.compiler.backend.x86.X86StackRegister
 import edu.kit.kastel.vads.compiler.ir.buildIr
 import edu.kit.kastel.vads.compiler.ir.util.toDotVisualization
 import edu.kit.kastel.vads.compiler.lexer.Lexer
@@ -74,14 +80,24 @@ private fun CompilerOptions.runCompiler() {
             System.err.println("File '${dotFile.toAbsolutePath()}' already exists, skipping write.")
         }
     }
+    val asmIr = lowerIrToAsmIr(irProgram)
+    val asmIrString = asmIrToString(asmIr)
+    println(asmIrString)
 
-    val assembly = generateX86Assembly(irProgram.graphs)
+    val registerAllocator = GraphColoringRegisterAllocator<X86Architecture>()
+    val registerAllocations =
+        asmIr.functions.associateWith { registerAllocator.allocateRegisters(X86Architecture.getAvailableRegisters(), it) { index -> X86StackRegister(index) } }
+
+    val assembly = X86CodeGenerator().generateCode(asmIr, registerAllocations)
 
     if (printAssembly) {
-        println(assembly.assembly)
+        require(assembly is X86Assembly)
+        val assemblyWithLineNumbers = assembly.assemblyCode.lines().mapIndexed { index, line -> "${index + 1}: $line" }.joinToString("\n")
+        println(assemblyWithLineNumbers)
     }
 
-    assembly.assembleTo(outputFile)
+    X86Assembler().assemble(assembly, outputFile)
+    println()
 }
 
 context(options: CompilerOptions)
@@ -89,46 +105,4 @@ private fun lexAndParse(input: Path): ParseResult {
     val tokens = Lexer(Files.readString(input), options).lex()
     val tokenSource = TokenSource(tokens)
     return parse(tokenSource)
-}
-
-private fun X86Assembly.assembleTo(path: Path) {
-    createTempFile("temp.s", path.toAbsolutePath().parent) { tempFile ->
-        when {
-            isLinux() -> assembleOnLinux(assembly, tempFile, path)
-            isMac() -> assembleOnMac(assembly, tempFile, path)
-            else -> System.err.println("Operating system ${System.getProperty("os.name")} is not supported")
-        }
-    }
-}
-
-private fun assembleOnLinux(assembly: String, tempFile: Path, binary: Path) {
-    Files.writeString(tempFile, assembly)
-
-    runProcessAndMaybePrintError("gcc", tempFile.toAbsolutePath().toString(), "-o", binary.toAbsolutePath().toString())
-}
-
-private fun assembleOnMac(assembly: String, tempFile: Path, binary: Path) {
-    val fixedAssembly = assembly
-        .replace(Regex("^main:", RegexOption.MULTILINE), "_main:")
-        .replace(".global main", "global _main")
-        .replace(".intel_syntax noprefix", "")
-        .replace("DWORD PTR", "DWORD")
-    Files.writeString(tempFile, fixedAssembly)
-
-    createTempFile("temp.o", tempFile.toAbsolutePath().parent) { objectFile ->
-        val result = runProcessAndMaybePrintError("nasm", "-f", "macho64", "-o", objectFile.toAbsolutePath().toString(), tempFile.toAbsolutePath().toString())
-        if (!result) {
-            return
-        }
-        runProcessAndMaybePrintError(
-            "ld",
-            "-o",
-            binary.toAbsolutePath().toString(),
-            objectFile.toAbsolutePath().toString(),
-            "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
-            "-lSystem",
-            "-macos_version_min",
-            "10.14"
-        )
-    }
 }

@@ -1,16 +1,28 @@
 package edu.kit.kastel.vads.compiler.backend
 
-import edu.kit.kastel.vads.compiler.ir.IrNode
+import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 
-interface RegisterAllocation<T : Register> {
-    operator fun get(node: IrNode): T?
+interface RegisterAllocation<T : Architecture> {
+    operator fun get(operand: AsmIr.Register): Location<T>
     val numberOfStackVariables: Int
 }
 
-data class SimpleRegisterAllocation<T : Register>(private val registerMap: Map<IrNode, T>, override val numberOfStackVariables: Int) : RegisterAllocation<T> {
-    override fun get(node: IrNode): T? = registerMap[node]
+data class RegisterInformation<T : Architecture>(val registers: Map<AsmIr.Operand, Location<T>>, val additionalRegisters: Map<AsmIr.Operand, Register<T>> = mapOf()) {
+    operator fun get(operand: AsmIr.Operand): Location<T> = registers[operand]!!
 }
 
-interface RegisterAllocator<T : Register> {
-    fun allocateRegisters(nodes: List<IrNode>): RegisterAllocation<T>
+sealed interface RegisterConstraint<T : Architecture> {
+    sealed interface InstructionConstraint<T : Architecture> : RegisterConstraint<T> {
+        val instruction: AsmIr.Instruction
+    }
+
+    data class NeedsFreeRegisters<T : Architecture>(override val instruction: AsmIr.Instruction, val registers: Set<Register<T>>) : InstructionConstraint<T>
+}
+
+interface RegisterAllocator<T : Architecture> {
+    fun allocateRegisters(
+        availableRegisters: List<Register<T>>,
+        function: AsmIr.Function,
+        stackSlotCreator: (Int) -> StackLocation<T>,
+    ): RegisterAllocation<T>
 }
