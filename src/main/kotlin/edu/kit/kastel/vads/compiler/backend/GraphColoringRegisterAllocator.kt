@@ -127,7 +127,7 @@ private fun calculateLiveness(instructionNumbering: Map<AsmIr.Instruction, Int>,
     }
 
     fun handleSource(operand: AsmIr.Operand, instructionNumber: Int) {
-        if (operand is AsmIr.Register) {
+        if (operand is AsmIr.Register && operand !in lastUse) {
             lastUse[operand] = instructionNumber
         }
     }
