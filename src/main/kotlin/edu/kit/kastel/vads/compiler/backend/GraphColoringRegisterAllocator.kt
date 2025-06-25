@@ -87,7 +87,7 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
         }
     }
 
-    val numberOfStackVariables = registerAllocation.values.mapNotNull { it as? StackLocation<T> }.maxOfOrNull { it.index } ?: 0
+    val numberOfStackVariables = registerAllocation.values.mapNotNull { it as? StackLocation<T> }.maxOfOrNull { it.index }?.plus(1) ?: 0
 
     return SimpleRegisterAllocation(numberOfStackVariables, registerAllocation)
 }
