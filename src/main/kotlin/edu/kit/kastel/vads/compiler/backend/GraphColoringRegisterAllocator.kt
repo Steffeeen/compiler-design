@@ -117,7 +117,7 @@ private fun calculateLiveness(instructionNumbering: Map<AsmIr.Instruction, Int>,
 
     val lastUse = mutableMapOf<AsmIr.Register, Int>()
 
-    fun handleDestination(operand: AsmIr.Operand, instructionNumber: Int) {
+    fun recordDefinition(operand: AsmIr.Operand, instructionNumber: Int) {
         if (operand is AsmIr.Register) {
             val start = instructionNumber + 1
             val end = lastUse[operand]!!
@@ -126,7 +126,7 @@ private fun calculateLiveness(instructionNumbering: Map<AsmIr.Instruction, Int>,
         }
     }
 
-    fun handleSource(operand: AsmIr.Operand, instructionNumber: Int) {
+    fun recordUse(operand: AsmIr.Operand, instructionNumber: Int) {
         if (operand is AsmIr.Register && operand !in lastUse) {
             lastUse[operand] = instructionNumber
         }
@@ -144,23 +144,27 @@ private fun calculateLiveness(instructionNumbering: Map<AsmIr.Instruction, Int>,
         for (instruction in block.instructions.reversed()) {
             when (instruction) {
                 is AsmIr.BinaryOperation -> {
-                    handleDestination(instruction.destination, instruction.number())
-                    handleSource(instruction.leftSource, instruction.number())
-                    handleSource(instruction.rightSource, instruction.number())
+                    recordDefinition(instruction.destination, instruction.number())
+                    recordUse(instruction.leftSource, instruction.number())
+                    recordUse(instruction.rightSource, instruction.number())
                 }
 
                 is AsmIr.UnaryOperation -> {
-                    handleDestination(instruction.destination, instruction.number())
-                    handleSource(instruction.source, instruction.number())
+                    recordDefinition(instruction.destination, instruction.number())
+                    recordUse(instruction.source, instruction.number())
                 }
 
                 is AsmIr.Return -> {
-                    handleSource(instruction.value, instruction.number())
+                    recordUse(instruction.value, instruction.number())
                 }
 
                 is AsmIr.Move -> {
-                    handleDestination(instruction.destination, instruction.number())
-                    handleSource(instruction.source, instruction.number())
+                    recordDefinition(instruction.destination, instruction.number())
+                    recordUse(instruction.source, instruction.number())
+                }
+
+                is AsmIr.ConditionalJump -> {
+                    recordUse(instruction.condition, instruction.number())
                 }
 
                 else -> {}
