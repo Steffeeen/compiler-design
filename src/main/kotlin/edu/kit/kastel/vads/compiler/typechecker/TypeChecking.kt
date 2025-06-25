@@ -146,6 +146,14 @@ private class TypeCheckingVisitor : VisitorWithParents() {
         typeCache[ternaryOperationNode] = trueBranchType
     }
 
+    override fun visit(functionNode: AstNode.FunctionNode, parents: List<AstNode>) {
+        functionNode.body.accept(this, Unit)
+    }
+
+    override fun visit(programNode: AstNode.ProgramNode, parents: List<AstNode>) {
+        programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
+    }
+
     private fun typeCheck(node: AstNode.ExpressionNode): Type {
         val type = when (node) {
             is AstNode.LiteralNode -> node.type
