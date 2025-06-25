@@ -171,7 +171,8 @@ private class Lowerer(private val irGraph: IrGraph) {
 
     context(currentBlock: BasicBlockBuilder)
     private fun generateDataNode(node: IrNode.DataNode, destination: AsmIr.Register) {
-        if (node in generatedNodes) {
+        // Constant nodes are data nodes and only result in an immediate move instruction. We thus don't have to ensure that we don't generate them multiple times.
+        if (node !is IrNode.ConstantNode<*> && node in generatedNodes) {
             return
         }
 
