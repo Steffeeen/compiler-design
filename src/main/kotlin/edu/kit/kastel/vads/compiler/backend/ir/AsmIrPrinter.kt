@@ -31,8 +31,8 @@ private fun printInstruction(instruction: AsmIr.Instruction): String {
         }
 
         is AsmIr.UnaryOperation -> "${printOperand(instruction.destination)} = ${instruction.operation.stringRepresentation()}${printOperand(instruction.source)}"
-        is AsmIr.Jump -> "Jump ${printOperand(instruction.target)}"
-        is AsmIr.ConditionalJump -> "ConditionalJump ${printOperand(instruction.condition)}, ${printOperand(instruction.target)}"
+        is AsmIr.Jump -> "Jump ${instruction.target.name}"
+        is AsmIr.ConditionalJump -> "ConditionalJump ${printOperand(instruction.condition)}, ${instruction.target.name}"
         is AsmIr.Return -> "Return ${printOperand(instruction.value)}"
         is AsmIr.Move -> "${printOperand(instruction.destination)} = ${printOperand(instruction.source)}"
     }
@@ -42,7 +42,6 @@ private fun printOperand(operand: AsmIr.Operand): String {
     return when (operand) {
         is AsmIr.Register -> "R${operand.id}"
         is AsmIr.Immediate -> operand.value.toString()
-        is AsmIr.Label -> operand.name
     }
 }
 

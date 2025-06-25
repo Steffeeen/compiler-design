@@ -4,9 +4,11 @@ interface AsmIr {
     sealed interface Instruction
 
     sealed interface Operand
-    data class Register(val id: Int) : Operand
+    data class Register(val id: Int) : Operand {
+        override fun toString(): String = "R$id"
+    }
     data class Immediate(val value: UInt) : Operand
-    data class Label(val name: String) : Operand
+    data class Label(val name: String)
 
     class BinaryOperation(val operation: BinaryOperationType, val destination: Register, val leftSource: Operand, val rightSource: Operand) : Instruction
 
