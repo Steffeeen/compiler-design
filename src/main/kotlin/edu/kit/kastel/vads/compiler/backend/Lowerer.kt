@@ -180,7 +180,9 @@ private class Lowerer(private val irGraph: IrGraph) {
         when (node) {
             is IrNode.UnaryOperationNode -> generateUnaryOperation(node, destination)
             is IrNode.BinaryOperationNode -> generateBinaryOperation(node, destination)
-            is IrNode.ConstantNode<*> -> error("Constants are handled directly in unary and binary operations")
+            is IrNode.ConstantNode<*> -> {
+                currentBlock.addFirst(AsmIr.Move(destination, source(node)))
+            }
             is IrNode.PhiNode -> generatePhiNode(node, destination)
         }
     }
