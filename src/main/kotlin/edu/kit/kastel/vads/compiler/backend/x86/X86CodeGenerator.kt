@@ -67,26 +67,59 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
 
     context(registerAllocation: RegisterAllocation<X86Architecture>)
     private fun generateBinaryOperation(instruction: AsmIr.BinaryOperation) = with(builder) {
-        val destination = registerAllocation[instruction.destination]
+        val allocatedDestination = registerAllocation[instruction.destination]
         val leftSource = instruction.leftSource.toX86Operand()
         val rightSource = instruction.rightSource.toX86Operand()
 
         val isCommutative = instruction.operation.isCommutative
 
         val source = when {
-            destination == leftSource -> rightSource // The ideal case, the register allocator put the left source in the destination register, so we can just use the right operand as the source
-            isCommutative && destination == rightSource -> leftSource // If the operation is commutative, we can use the left operand as the source
-            destination == rightSource -> {
+            allocatedDestination == leftSource -> rightSource // The ideal case, the register allocator put the left source in the destination register, so we can just use the right operand as the source
+            isCommutative && allocatedDestination == rightSource -> leftSource // If the operation is commutative, we can use the left operand as the source
+            allocatedDestination == rightSource -> {
                 // If the destination also happens to be the right operand, we need to move the right operand into a temporary register to avoid overwriting it by putting the left operand in the destination
                 mov(X86Architecture.TEMP_REGISTER, rightSource)
-                mov(destination, leftSource)
+                if (allocatedDestination is StackLocation<X86Architecture> && leftSource is StackLocation<X86Architecture>) {
+                    // FIXME using eax here isn't really optimal, but it works for now as it is excluded from the register allocation
+                    // If both source and destination are stack locations, we need to use a temporary register
+                    mov(X86Registers.EAX, leftSource)
+                    mov(allocatedDestination, X86Registers.EAX)
+                } else {
+                    // Otherwise, we can directly move the left operand into the destination register
+                    mov(allocatedDestination, leftSource)
+                }
                 X86Architecture.TEMP_REGISTER
             }
 
             else -> {
                 // The default case, as we are translating from a three-address IR, we move the left operand into the destination register
-                mov(destination, leftSource)
+                if (allocatedDestination is StackLocation<X86Architecture> && leftSource is StackLocation<X86Architecture>) {
+                    // If both source and destination are stack locations, we need to use a temporary register
+                    mov(X86Architecture.TEMP_REGISTER, leftSource)
+                    mov(allocatedDestination, X86Architecture.TEMP_REGISTER)
+                } else {
+                    // Otherwise, we can directly move the left operand into the destination register
+                    mov(allocatedDestination, leftSource)
+                }
                 rightSource
+            }
+        }
+
+        val destination = when {
+            allocatedDestination is StackLocation<X86Architecture> && source is StackLocation<X86Architecture> -> {
+                // If both source and destination are stack locations, we need to use a temporary register
+                mov(X86Architecture.TEMP_REGISTER, allocatedDestination)
+                X86Architecture.TEMP_REGISTER
+            }
+
+            instruction.operation == MULTIPLY && allocatedDestination is StackLocation<X86Architecture> -> {
+                // FIXME: again using eax here isn't really optimal, but it works for now as it is excluded from the register allocation
+                mov(X86Registers.EAX, allocatedDestination)
+                X86Registers.EAX
+            }
+
+            else -> {
+                allocatedDestination
             }
         }
 
@@ -102,6 +135,11 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             BITWISE_XOR -> xor(destination, source)
 
             EQUAL, NOT_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL -> generateCompare(instruction.operation, destination, source)
+        }
+
+        if (destination != allocatedDestination) {
+            // If we used a temporary register, we need to move the result back to the allocated destination
+            mov(allocatedDestination, destination)
         }
     }
 
@@ -202,7 +240,6 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
         return when (this) {
             is AsmIr.Register -> registerAllocation[this]
             is AsmIr.Immediate -> X86Immediate(value)
-            else -> error("Unsupported operand type: $this")
         }
     }
 }
