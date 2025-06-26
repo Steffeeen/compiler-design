@@ -5,6 +5,7 @@ import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
+import edu.kit.kastel.vads.compiler.typechecker.Type
 import edu.kit.kastel.vads.compiler.typechecker.TypeChecking
 import edu.kit.kastel.vads.compiler.typechecker.TypeError
 
@@ -18,6 +19,8 @@ sealed interface SemanticError {
     data class ContinueNotInLoop(val node: AstNode.ContinueNode) : SemanticError
     data class DeclarationInForIncrement(val node: AstNode.DeclarationNode) : SemanticError
     data class TypeErrorWrapper(val error: TypeError) : SemanticError
+    object NoMainFunction : SemanticError
+    object MainHasWrongSignature : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -27,6 +30,7 @@ interface SemanticAnalysis {
 context(options: CompilerOptions)
 fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
     val analyses = listOf(
+        MainFunctionAnalysis,
         ReturnAnalysis,
         BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
@@ -43,6 +47,25 @@ fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
     }
 
     return listOf()
+}
+
+private object MainFunctionAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val mainFunction = program.topLevelFunctions.firstOrNull { it.name.name.asString() == "main" }
+        if (mainFunction == null) {
+            return listOf(SemanticError.NoMainFunction)
+        }
+
+        if (mainFunction.returnType.type != Type.IntType) {
+            return listOf(SemanticError.MainHasWrongSignature)
+        }
+
+        if (mainFunction.parameters.isNotEmpty()) {
+            return listOf(SemanticError.MainHasWrongSignature)
+        }
+
+        return listOf()
+    }
 }
 
 private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
