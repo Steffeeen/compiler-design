@@ -23,4 +23,7 @@ interface Visitor<T, R> {
     fun visit(breakNode: BreakNode, data: T): R
     fun visit(continueNode: ContinueNode, data: T): R
     fun visit(ternaryOperationNode: TernaryOperationNode, data: T): R
+    fun visit(callNormalNode: CallNormalNode, data: T): R
+    fun visit(callBuiltinNode: CallBuiltinNode, data: T): R
+    fun visit(parameterNode: ParameterNode, data: T): R
 }

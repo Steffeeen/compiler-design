@@ -10,8 +10,6 @@ import edu.kit.kastel.vads.compiler.typechecker.Type
 sealed class ParseError(open val span: Span) : Exception() {
     data class UnexpectedToken(val token: Token, override val span: Span) : ParseError(span)
     data class UnexpectedEndOfFile(override val span: Span) : ParseError(span)
-    data class ExpectedEndOfFile(override val span: Span) : ParseError(span)
-    data class FunctionNotNamedMain(override val span: Span) : ParseError(span)
     data class InvalidType(override val span: Span) : ParseError(span)
 }
 
@@ -34,27 +32,28 @@ fun parse(tokenSource: TokenSource): ParseResult {
 
 private class Parser(private val tokenSource: TokenSource, private val options: CompilerOptions) {
     fun parseProgram(): ProgramNode {
-        val program = ProgramNode(listOf(parseMainFunction()))
+        val functions = mutableListOf<FunctionNode>()
 
-        if (!tokenSource.hasNoMoreTokens()) {
-            throw ParseError.ExpectedEndOfFile(tokenSource.peek()!!.span)
+        while (tokenSource.hasMoreTokens()) {
+            functions += parseFunction()
         }
 
-        return program
+        return ProgramNode(functions)
     }
 
-    private fun parseMainFunction(): FunctionNode {
-        val returnType = expectType<KeywordType>(KeywordType.INT)
+    private fun parseFunction(): FunctionNode {
+        val returnType = expectType<KeywordType.TypeKeywordType>()
         val identifier = expect<Identifier>()
 
-        if (identifier.value != "main") {
-            throw ParseError.FunctionNotNamedMain(identifier.span)
-        }
-
         expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        val parameters = parseCommaSeparatedList(SeparatorType.PAREN_CLOSE) {
+            val type = parseType()
+            val identifier = expect<Identifier>()
+            ParameterNode(type, createNameNode(identifier))
+        }
         expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
         val body = parseBlock()
-        return FunctionNode(TypeNode(Type.IntType, returnType.span), createNameNode(identifier), body)
+        return FunctionNode(TypeNode(Type.IntType, returnType.span), parameters, createNameNode(identifier), body)
     }
 
     private fun parseBlock(): BlockNode {
@@ -122,14 +121,26 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
     }
 
     private fun parseSimple(): SimpleNode {
+        fun parseAssignment(): AssignmentNode {
+            val lValue = parseLValue()
+            val assignmentOperatorType = parseAssignmentOperator()
+            val expression = parseExpression()
+            return AssignmentNode(lValue, assignmentOperatorType, expression)
+        }
+
         return when (val token = tokenSource.peek()) {
             is Keyword if token.type == KeywordType.INT || token.type == KeywordType.BOOL -> parseDeclaration()
-            else -> {
-                val lValue = parseLValue()
-                val assignmentOperatorType = parseAssignmentOperator()
-                val expression = parseExpression()
-                AssignmentNode(lValue, assignmentOperatorType, expression)
+            is Keyword if token.type is KeywordType.BuiltinFunctionType -> parseBuiltinCall()
+            is Identifier -> {
+                val nextToken = tokenSource.peekNext()
+                if (nextToken is Separator && nextToken.type == SeparatorType.PAREN_OPEN) {
+                    parseCall()
+                } else {
+                    parseAssignment()
+                }
             }
+
+            else -> parseAssignment()
         }
     }
 
@@ -271,7 +282,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
 
             if (token is Operator && token.type == OperatorType.TERNARY && OperatorType.TERNARY.ternaryPrecedence >= minPrecedence) {
                 tokenSource.consume()
-                val trueBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence + 1)
+                val trueBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence)
                 expectType(SeparatorType.COLON)
                 val falseBranch = computeExpression(OperatorType.TERNARY.ternaryPrecedence)
                 result = TernaryOperationNode(result, trueBranch, falseBranch)
@@ -310,9 +321,16 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
                 UnaryOperationNode(atom, token.type, token.span.merge(atom.span))
             }
 
+            is Keyword if token.type is KeywordType.BuiltinFunctionType -> parseBuiltinCall()
+
             is Identifier -> {
-                tokenSource.consume()
-                IdentifierExpressionNode(createNameNode(token))
+                val nextToken = tokenSource.peekNext()
+                if (nextToken is Separator && nextToken.type == SeparatorType.PAREN_OPEN) {
+                    parseCall()
+                } else {
+                    tokenSource.consume()
+                    IdentifierExpressionNode(createNameNode(token))
+                }
             }
 
             is Keyword if token.type == KeywordType.TRUE || token.type == KeywordType.FALSE -> {
@@ -330,6 +348,49 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         }
     }
 
+    private fun parseCall(): CallNormalNode {
+        val identifier = expect<Identifier>()
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        val arguments = parseCommaSeparatedList(SeparatorType.PAREN_CLOSE, ::parseExpression)
+        val parenClose = expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
+
+        return CallNormalNode(createNameNode(identifier), arguments, identifier.span.merge(parenClose.span))
+    }
+
+    private fun parseBuiltinCall(): CallBuiltinNode {
+        val token = expect<Keyword>()
+        require(token.type is KeywordType.BuiltinFunctionType)
+
+        expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
+        val arguments = parseCommaSeparatedList(SeparatorType.PAREN_CLOSE, ::parseExpression)
+        val parenClose = expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
+
+        return CallBuiltinNode(token.type, arguments, token.span.merge(parenClose.span))
+    }
+
+    private fun <T : AstNode> parseCommaSeparatedList(endSeparator: SeparatorType, parseElement: () -> T): List<T> {
+        val elements = mutableListOf<T>()
+
+        val token = tokenSource.peek()
+        if (token is Separator && token.type == endSeparator) {
+            return elements
+        }
+
+        elements += parseElement()
+
+        while (true) {
+            when (val token = tokenSource.peek()) {
+                is Separator if token.type == endSeparator -> break
+                else -> {
+                    expectType(SeparatorType.COMMA)
+                    elements += parseElement()
+                }
+            }
+        }
+
+        return elements
+    }
+
     private fun unexpectedToken(token: Token?): Nothing {
         if (token == null) {
             throw ParseError.UnexpectedEndOfFile(tokenSource.createEOFSpan())
@@ -345,6 +406,15 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         }
 
         tokenSource.consume()
+        return token
+    }
+
+    private inline fun <reified T : TokenType> expectType(): TokenWithType<T> {
+        val token = expect<TokenWithType<T>>()
+        @Suppress("USELESS_IS_CHECK") // this seems like an IntelliJ bug, if the check is removed it does not work
+        if (token.type !is T) {
+            throw ParseError.UnexpectedToken(token, token.span)
+        }
         return token
     }
 

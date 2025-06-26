@@ -52,4 +52,10 @@ abstract class VisitorWithParents : Visitor<Unit, Unit> {
     open fun visit(continueNode: ContinueNode, parents: List<AstNode>) {}
     final override fun visit(ternaryOperationNode: TernaryOperationNode, data: Unit) = withParent(ternaryOperationNode) { visit(ternaryOperationNode, parents) }
     open fun visit(ternaryOperationNode: TernaryOperationNode, parents: List<AstNode>) {}
+    final override fun visit(callNormalNode: CallNormalNode, data: Unit) = withParent(callNormalNode) { visit(callNormalNode, parents) }
+    open fun visit(callNormalNode: CallNormalNode, parents: List<AstNode>) {}
+    final override fun visit(callBuiltinNode: CallBuiltinNode, data: Unit) = withParent(callBuiltinNode) { visit(callBuiltinNode, parents) }
+    open fun visit(callBuiltinNode: CallBuiltinNode, parents: List<AstNode>) {}
+    final override fun visit(parameterNode: ParameterNode, data: Unit) = withParent(parameterNode) { visit(parameterNode, parents) }
+    open fun visit(parameterNode: ParameterNode, parents: List<AstNode>) {}
 }

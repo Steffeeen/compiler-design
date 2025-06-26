@@ -15,8 +15,20 @@ class TokenSource(private val tokens: List<Token>) {
         return tokens[index]
     }
 
+    fun peekNext(): Token? {
+        if (index + 1 >= tokens.size) {
+            return null
+        }
+
+        return tokens[index + 1]
+    }
+
+    fun hasMoreTokens(): Boolean {
+        return index < tokens.size
+    }
+
     fun hasNoMoreTokens(): Boolean {
-        return index >= tokens.size
+        return !hasMoreTokens()
     }
 
     fun consume(): Token? {

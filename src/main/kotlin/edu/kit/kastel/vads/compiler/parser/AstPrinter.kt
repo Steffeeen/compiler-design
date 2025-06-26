@@ -30,6 +30,9 @@ private fun printNode(node: AstNode, depth: Int): String {
         is ForNode -> printForNode(node, depth)
         is IfNode -> printIfNode(node, depth)
         is WhileNode -> printWhileNode(node, depth)
+        is CallBuiltinNode -> printCallBuiltinNode(node, depth)
+        is CallNormalNode -> printCallNormalNode(node, depth)
+        is ParameterNode -> printParameterNode(node, depth)
     }
 }
 
@@ -143,6 +146,21 @@ private fun printWhileNode(node: WhileNode, depth: Int): String {
     return "${printNodeNameAndSpan(node, depth)}\n$condition\n$body"
 }
 
+private fun printCallBuiltinNode(node: CallBuiltinNode, depth: Int): String {
+    val args = node.arguments.joinToString("\n") { printNode(it, depth + INDENT) }
+    return "${printNodeNameAndSpan(node, depth)} builtin: ${node.keyword}\n$args"
+}
+
+private fun printCallNormalNode(node: CallNormalNode, depth: Int): String {
+    val name = printNameNode(node.name, depth + INDENT)
+    val args = node.arguments.joinToString("\n") { printNode(it, depth + INDENT) }
+    return "${printNodeNameAndSpan(node, depth)}\n$name\n$args"
+}
+
+private fun printParameterNode(node: ParameterNode, depth: Int): String {
+    return "${printNodeNameAndSpan(node, depth)} ${node.name.name.asString()}: ${node.type.type.asString()}"
+}
+
 private fun printNodeNameAndSpan(node: AstNode, depth: Int): String {
     return " ".repeat(depth) + "${node::class.simpleName} ${printSpan(node.span)}"
 }
@@ -150,4 +168,3 @@ private fun printNodeNameAndSpan(node: AstNode, depth: Int): String {
 private fun printSpan(span: Span): String {
     return "(${span.start.line}, ${span.start.column}) - (${span.end.line}, ${span.end.column})"
 }
-

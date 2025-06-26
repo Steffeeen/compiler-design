@@ -43,4 +43,10 @@ abstract class VisitorWithoutData : Visitor<Unit, Unit> {
     open fun visit(continueNode: ContinueNode) {}
     final override fun visit(ternaryOperationNode: TernaryOperationNode, data: Unit) = visit(ternaryOperationNode)
     open fun visit(ternaryOperationNode: TernaryOperationNode) {}
+    final override fun visit(callNormalNode: CallNormalNode, data: Unit) = visit(callNormalNode)
+    open fun visit(callNormalNode: CallNormalNode) {}
+    final override fun visit(callBuiltinNode: CallBuiltinNode, data: Unit) = visit(callBuiltinNode)
+    open fun visit(callBuiltinNode: CallBuiltinNode) {}
+    final override fun visit(parameterNode: ParameterNode, data: Unit) = visit(parameterNode)
+    open fun visit(parameterNode: ParameterNode) {}
 }

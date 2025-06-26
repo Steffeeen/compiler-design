@@ -37,6 +37,9 @@ sealed interface Token {
     sealed interface KeywordType : TokenType {
         sealed class KeywordTypeImpl(override val value: String) : KeywordType
 
+        sealed interface TypeKeywordType : KeywordType
+        sealed interface BuiltinFunctionType : KeywordType
+
         object STRUCT : KeywordTypeImpl("struct")
         object IF : KeywordTypeImpl("if")
         object ELSE : KeywordTypeImpl("else")
@@ -49,15 +52,16 @@ sealed interface Token {
         object TRUE : KeywordTypeImpl("true")
         object FALSE : KeywordTypeImpl("false")
         object NULL : KeywordTypeImpl("NULL")
-        object PRINT : KeywordTypeImpl("print")
-        object READ : KeywordTypeImpl("read")
+        object PRINT : KeywordTypeImpl("print"), BuiltinFunctionType
+        object READ : KeywordTypeImpl("read"), BuiltinFunctionType
         object ALLOC : KeywordTypeImpl("alloc")
         object ALLOC_ARRAY : KeywordTypeImpl("alloc_array")
-        object INT : KeywordTypeImpl("int")
-        object BOOL : KeywordTypeImpl("bool")
+        object INT : KeywordTypeImpl("int"), TypeKeywordType
+        object BOOL : KeywordTypeImpl("bool"), TypeKeywordType
         object VOID : KeywordTypeImpl("void")
         object CHAR : KeywordTypeImpl("char")
         object STRING : KeywordTypeImpl("string")
+        object FLUSH : KeywordTypeImpl("flush"), BuiltinFunctionType
 
         companion object {
             val entries by lazy {
@@ -77,6 +81,7 @@ sealed interface Token {
         object BRACE_CLOSE : SeparatorTypeImpl("}")
         object COLON : SeparatorTypeImpl(":")
         object SEMICOLON : SeparatorTypeImpl(";")
+        object COMMA : SeparatorTypeImpl(",")
 
         companion object {
             val entries by lazy {

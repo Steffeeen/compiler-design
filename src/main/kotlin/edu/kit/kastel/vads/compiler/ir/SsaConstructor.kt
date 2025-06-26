@@ -67,6 +67,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.ContinueNode -> handleContinueNode(lastSideEffectNode, lastControlNode)
             is AstNode.ForNode -> handleForNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.WhileNode -> handleWhileNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.CallBuiltinNode -> TODO()
+            is AstNode.CallNormalNode -> TODO()
         }
     }
 
@@ -78,6 +80,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.LiteralNode -> Triple(createLiteralIrNode(astNode), lastSideEffectNode, lastControlNode)
             is AstNode.UnaryOperationNode -> createUnaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.TernaryOperationNode -> handleTernaryOperationNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.CallBuiltinNode -> TODO()
+            is AstNode.CallNormalNode -> TODO()
         }
     }
 

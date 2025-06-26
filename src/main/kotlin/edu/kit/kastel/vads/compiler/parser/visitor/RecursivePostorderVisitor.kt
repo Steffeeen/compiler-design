@@ -28,6 +28,9 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
     override fun visit(breakNode: BreakNode, data: T): R = visitInOrderAndAccumulate(breakNode, data)
     override fun visit(continueNode: ContinueNode, data: T): R = visitInOrderAndAccumulate(continueNode, data)
     override fun visit(ternaryOperationNode: TernaryOperationNode, data: T): R = visitInOrderAndAccumulate(ternaryOperationNode, data)
+    override fun visit(callNormalNode: CallNormalNode, data: T): R = visitInOrderAndAccumulate(callNormalNode, data)
+    override fun visit(callBuiltinNode: CallBuiltinNode, data: T): R = visitInOrderAndAccumulate(callBuiltinNode, data)
+    override fun visit(parameterNode: ParameterNode, data: T): R = visitInOrderAndAccumulate(parameterNode, data)
 
     private fun visitInOrderAndAccumulate(currentNode: AstNode, data: T): R {
         val nodes = currentNode.children
@@ -66,6 +69,9 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
             is BreakNode -> visitor.visit(node, accumulatedData)
             is ContinueNode -> visitor.visit(node, accumulatedData)
             is TernaryOperationNode -> visitor.visit(node, accumulatedData)
+            is CallNormalNode -> visitor.visit(node, accumulatedData)
+            is CallBuiltinNode -> visitor.visit(node, accumulatedData)
+            is ParameterNode -> visitor.visit(node, accumulatedData)
         }
     }
 

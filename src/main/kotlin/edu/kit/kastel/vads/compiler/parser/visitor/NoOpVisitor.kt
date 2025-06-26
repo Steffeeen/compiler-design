@@ -25,4 +25,7 @@ interface NoOpVisitor<T> : Visitor<T, Unit> {
     override fun visit(breakNode: BreakNode, data: T) {}
     override fun visit(continueNode: ContinueNode, data: T) {}
     override fun visit(ternaryOperationNode: TernaryOperationNode, data: T) {}
+    override fun visit(callNormalNode: CallNormalNode, data: T) {}
+    override fun visit(callBuiltinNode: CallBuiltinNode, data: T) {}
+    override fun visit(parameterNode: ParameterNode, data: T) {}
 }

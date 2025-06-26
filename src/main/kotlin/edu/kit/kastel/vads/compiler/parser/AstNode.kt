@@ -49,7 +49,13 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class FunctionNode(val returnType: TypeNode, val name: NameNode, val body: BlockNode) : AstNode {
+    data class ParameterNode(val type: TypeNode, val name: NameNode) : AstNode {
+        override val span get() = type.span.merge(name.span)
+        override val children: List<AstNode> = listOf(type, name)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class FunctionNode(val returnType: TypeNode, val parameters: List<ParameterNode>, val name: NameNode, val body: BlockNode) : AstNode {
         override val span get() = Span.SimpleSpan(returnType.span.start, body.span.end)
         override val children: List<AstNode> = listOf(returnType, name, body)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
@@ -159,6 +165,20 @@ sealed interface AstNode {
     ) : ExpressionNode {
         override val span get() = condition.span.merge(falseExpression.span)
         override val children: List<AstNode> = listOf(condition, trueExpression, falseExpression)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    sealed interface CallNode : ExpressionNode, SimpleNode {
+        val arguments: List<ExpressionNode>
+    }
+
+    data class CallNormalNode(val name: NameNode, override val arguments: List<ExpressionNode>, override val span: Span) : CallNode {
+        override val children: List<AstNode> = arguments
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class CallBuiltinNode(val keyword: Token.KeywordType.BuiltinFunctionType, override val arguments: List<ExpressionNode>, override val span: Span) : CallNode {
+        override val children: List<AstNode> = arguments
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 }
