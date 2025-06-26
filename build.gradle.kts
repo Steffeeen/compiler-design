@@ -17,11 +17,11 @@ repositories {
 }
 
 dependencies {
-    testImplementation(platform("org.junit:junit-bom:5.10.0"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
     implementation(kotlin("stdlib-jdk8"))
     implementation(kotlin("reflect"))
     implementation("com.github.ajalt.clikt:clikt:5.0.3")
+
+    testImplementation(kotlin("test"))
 }
 
 kotlin {
@@ -32,7 +32,14 @@ tasks.test {
     useJUnitPlatform()
 }
 
+val compilerOptions = listOf("-Xwhen-guards", "-Xcontext-parameters")
+
 val compileKotlin: KotlinCompile by tasks
 compileKotlin.compilerOptions {
-    freeCompilerArgs.set(listOf("-Xwhen-guards", "-Xcontext-parameters"))
+    freeCompilerArgs = compilerOptions
+}
+
+val compileTestKotlin: KotlinCompile by tasks
+compileTestKotlin.compilerOptions {
+    freeCompilerArgs = compilerOptions
 }
