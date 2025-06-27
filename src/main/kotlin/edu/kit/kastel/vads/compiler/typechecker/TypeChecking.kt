@@ -2,13 +2,13 @@ package edu.kit.kastel.vads.compiler.typechecker
 
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
+import edu.kit.kastel.vads.compiler.parser.SymbolName
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithParents
 import edu.kit.kastel.vads.compiler.semantic.SemanticAnalysis
 import edu.kit.kastel.vads.compiler.semantic.SemanticError
 import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
 sealed interface TypeError {
-    data class MainMustReturnInt(val node: AstNode.FunctionNode) : TypeError
     data class TypeMismatchSingleNode(val node: AstNode, val actual: Type, val expected: Type) : TypeError
     data class TypeMismatchTwoNodes(val node1: AstNode, val type1: Type, val node2: AstNode, val type2: Type) : TypeError
 }
@@ -16,11 +16,11 @@ sealed interface TypeError {
 object TypeChecking : SemanticAnalysis {
     override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
         val errors = mutableListOf<TypeError>()
-        if (program.topLevelFunctions.first().returnType.type != Type.IntType) {
-            errors += TypeError.MainMustReturnInt(program.topLevelFunctions.first())
-        }
 
-        val visitor = TypeCheckingVisitor()
+        val functionTypes =
+            program.topLevelFunctions.associate { function -> function.name.name to Type.FunctionType(function.returnType.type, function.parameters.map { it.type.type }) }
+
+        val visitor = TypeCheckingVisitor(functionTypes)
         program.accept(visitor, Unit)
         errors += visitor.errors
 
@@ -28,7 +28,7 @@ object TypeChecking : SemanticAnalysis {
     }
 }
 
-private class TypeCheckingVisitor : VisitorWithParents() {
+private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Type.FunctionType>) : VisitorWithParents() {
 
     val errors: MutableList<TypeError> = mutableListOf()
     private val typeCache: MutableMap<AstNode.ExpressionNode, Type> = mutableMapOf()
@@ -38,6 +38,10 @@ private class TypeCheckingVisitor : VisitorWithParents() {
         createNamespace {
             blockNode.statements.forEach { typeCheck(it) }
         }
+    }
+
+    override fun visit(parameterNode: AstNode.ParameterNode, parents: List<AstNode>) {
+        symbolTable.setInTopMost(parameterNode.name, parameterNode.type.type)
     }
 
     override fun visit(declarationNode: AstNode.DeclarationNode, parents: List<AstNode>) {
@@ -146,8 +150,33 @@ private class TypeCheckingVisitor : VisitorWithParents() {
         typeCache[ternaryOperationNode] = trueBranchType
     }
 
+    override fun visit(callNormalNode: AstNode.CallNormalNode, parents: List<AstNode>) {
+        val functionType = functionTypes[callNormalNode.name.name]!!
+        compareFunctionTypes(callNormalNode.arguments, functionType)
+
+        typeCache[callNormalNode] = functionType.returnType
+    }
+
+    override fun visit(callBuiltinNode: AstNode.CallBuiltinNode, parents: List<AstNode>) {
+        val functionType = Type.getTypeForBuiltinFunction(callBuiltinNode.keyword)
+        compareFunctionTypes(callBuiltinNode.arguments, functionType)
+
+        typeCache[callBuiltinNode] = functionType.returnType
+    }
+
+    private fun compareFunctionTypes(arguments: List<AstNode.ExpressionNode>, functionType: Type.FunctionType) {
+        val argumentsToType = arguments.associateWith { typeCheck(it) }.toList()
+        for ((expectedType, actual) in functionType.parameterTypes.zip(argumentsToType)) {
+            val (node, actualType) = actual
+            compareTypes(expectedType, actualType, node)
+        }
+    }
+
     override fun visit(functionNode: AstNode.FunctionNode, parents: List<AstNode>) {
-        functionNode.body.accept(this, Unit)
+        createNamespace {
+            functionNode.parameters.forEach { it.accept(this, Unit) }
+            functionNode.body.accept(this, Unit)
+        }
     }
 
     override fun visit(programNode: AstNode.ProgramNode, parents: List<AstNode>) {

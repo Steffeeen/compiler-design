@@ -35,7 +35,6 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     private val blockToNamespace = mutableMapOf<AstNode.BlockNode, Namespace<VariableStatus>>()
 
     override fun visit(programNode: AstNode.ProgramNode) = programNode.topLevelFunctions.forEach { it.accept(this, Unit) }
-    override fun visit(functionNode: AstNode.FunctionNode) = functionNode.body.accept(this, Unit)
     override fun visit(unaryOperationNode: AstNode.UnaryOperationNode) = unaryOperationNode.expression.accept(this, Unit)
     override fun visit(returnNode: AstNode.ReturnNode) = returnNode.expression.accept(this, Unit)
     override fun visit(binaryOperationNode: AstNode.BinaryOperationNode) {
@@ -73,6 +72,18 @@ private class VariableStatusVisitor : VisitorWithoutData() {
             // the initializer is an assignment to an existing variable, so we can just update the status in the current namespace
             doAnalysis()
         }
+    }
+
+    override fun visit(functionNode: AstNode.FunctionNode) {
+        createNamespace {
+            functionNode.parameters.forEach { it.accept(this, Unit) }
+            functionNode.body.accept(this, Unit)
+        }
+    }
+
+    override fun visit(parameterNode: AstNode.ParameterNode) {
+        checkUndeclared(parameterNode.name)
+        updateStatus(parameterNode.name, VariableStatus.INITIALIZED)
     }
 
     override fun visit(blockNode: AstNode.BlockNode) {

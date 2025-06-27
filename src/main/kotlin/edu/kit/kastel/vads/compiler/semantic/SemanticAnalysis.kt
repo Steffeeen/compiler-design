@@ -3,8 +3,10 @@ package edu.kit.kastel.vads.compiler.semantic
 import edu.kit.kastel.vads.compiler.CompilerOptions
 import edu.kit.kastel.vads.compiler.Span
 import edu.kit.kastel.vads.compiler.parser.AstNode
+import edu.kit.kastel.vads.compiler.parser.SymbolName
 import edu.kit.kastel.vads.compiler.parser.visitor.NoOpVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
+import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
 import edu.kit.kastel.vads.compiler.typechecker.Type
 import edu.kit.kastel.vads.compiler.typechecker.TypeChecking
 import edu.kit.kastel.vads.compiler.typechecker.TypeError
@@ -21,6 +23,9 @@ sealed interface SemanticError {
     data class TypeErrorWrapper(val error: TypeError) : SemanticError
     object NoMainFunction : SemanticError
     object MainHasWrongSignature : SemanticError
+    data class FunctionAlreadyDeclared(val node: AstNode.NameNode) : SemanticError
+    data class FunctionNotDeclared(val node: AstNode.NameNode) : SemanticError
+    data class FunctionCallWrongNumberOfArguments(val node: AstNode.CallNode, val expected: Int, val actual: Int) : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -31,6 +36,8 @@ context(options: CompilerOptions)
 fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
     val analyses = listOf(
         MainFunctionAnalysis,
+        FunctionDefinitionAnalysis,
+        FunctionCallAnalysis,
         ReturnAnalysis,
         BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
@@ -68,17 +75,65 @@ private object MainFunctionAnalysis : SemanticAnalysis {
     }
 }
 
+private object FunctionDefinitionAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+        val functionNames = mutableSetOf<SymbolName>()
+
+        for (function in program.topLevelFunctions) {
+            if (function.name.name in functionNames) {
+                errors += SemanticError.FunctionAlreadyDeclared(function.name)
+            } else {
+                functionNames += function.name.name
+            }
+        }
+
+        return errors
+    }
+}
+
+private object FunctionCallAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+
+        val functionMap = program.topLevelFunctions.associateBy { it.name.name }
+
+        program.accept(RecursivePostorderVisitor(object : VisitorWithoutData() {
+            override fun visit(callNormalNode: AstNode.CallNormalNode) {
+                if (callNormalNode.name.name !in functionMap) {
+                    errors += SemanticError.FunctionNotDeclared(callNormalNode.name)
+                    return
+                }
+
+                val functionNode = functionMap[callNormalNode.name.name]!!
+                if (callNormalNode.arguments.size != functionNode.parameters.size) {
+                    errors += SemanticError.FunctionCallWrongNumberOfArguments(callNormalNode, functionNode.parameters.size, callNormalNode.arguments.size)
+                }
+            }
+
+            override fun visit(callBuiltinNode: AstNode.CallBuiltinNode) {
+                val type = Type.getTypeForBuiltinFunction(callBuiltinNode.keyword)
+                if (callBuiltinNode.arguments.size != type.parameterTypes.size) {
+                    errors += SemanticError.FunctionCallWrongNumberOfArguments(callBuiltinNode, type.parameterTypes.size, callBuiltinNode.arguments.size)
+                }
+            }
+        }), Unit)
+
+        return errors
+    }
+}
+
 private object IntegerLiteralRangeAnalysis : SemanticAnalysis {
     override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
         val errors = mutableListOf<SemanticError>()
 
         val visitor = object : NoOpVisitor<Unit> {
-            override fun visit(literalNode: AstNode.IntLiteralNode, data: Unit) {
-                if (literalNode.parseValue() != null) {
+            override fun visit(intLiteralNode: AstNode.IntLiteralNode, data: Unit) {
+                if (intLiteralNode.parseValue() != null) {
                     return
                 }
 
-                errors += SemanticError.InvalidIntegerLiteralRange(literalNode)
+                errors += SemanticError.InvalidIntegerLiteralRange(intLiteralNode)
             }
         }
 
