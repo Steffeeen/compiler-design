@@ -54,23 +54,20 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     }
 
     override fun visit(forNode: AstNode.ForNode) {
-        fun doAnalysis() {
+        if (forNode.initializer !is AstNode.DeclarationNode) {
+            forNode.initializer?.accept(this, Unit)
+        }
+        createNamespace {
             forNode.initializer?.accept(this, Unit)
             forNode.condition.accept(this, Unit)
 
             // Analyze the body before the increment to ensure that if a variable is initialized in the increment, it is not considered initialized in the body
-            forNode.body.accept(this, Unit)
+            createNamespace { forNode.body.accept(this, Unit) }
+            val variablesDeclaredBeforeBody = statusStack.getAll().keys
+            val bodyNamespace = getNamespaceForBlockOrSingleStatement(forNode.body)
+            bodyNamespace.getAll().filter { it.key in variablesDeclaredBeforeBody }.forEach { statusStack.setInTopMost(it.key, it.value) }
 
             forNode.increment?.accept(this, Unit)
-        }
-
-        if (forNode.initializer is AstNode.DeclarationNode) {
-            // The initializer declares a new variable, so we create a new namespace for the for loop to avoid leaking the loop variable into the outer namespace
-            createNamespace { doAnalysis() }
-        } else {
-            // There is no initializer or
-            // the initializer is an assignment to an existing variable, so we can just update the status in the current namespace
-            doAnalysis()
         }
     }
 
