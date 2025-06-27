@@ -42,7 +42,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
     }
 
     private fun parseFunction(): FunctionNode {
-        val returnType = expectType<KeywordType.TypeKeywordType>()
+        val returnType = parseType()
         val identifier = expect<Identifier>()
 
         expectType<SeparatorType>(SeparatorType.PAREN_OPEN)
@@ -53,7 +53,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
         }
         expectType<SeparatorType>(SeparatorType.PAREN_CLOSE)
         val body = parseBlock()
-        return FunctionNode(TypeNode(Type.IntType, returnType.span), parameters, createNameNode(identifier), body)
+        return FunctionNode(returnType, parameters, createNameNode(identifier), body)
     }
 
     private fun parseBlock(): BlockNode {
