@@ -38,6 +38,26 @@ sealed interface IrNode {
 
     class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 
+    sealed interface CallNode : DataNode, SideEffectRelevantNode, ControlRelevantNode
+
+    class NormalCallNode(val name: SymbolName, val parameters: List<DataNode>, override val sideEffect: SideEffectNode, override val control: ControlNode) : CallNode {
+        override val dataInputs: List<DataNode> = parameters
+    }
+
+    sealed interface BuiltinCallNode : CallNode
+
+    class PrintNode(val parameter: DataNode, override val sideEffect: SideEffectNode, override val control: ControlNode) : BuiltinCallNode {
+        override val dataInputs: List<DataNode> = listOf(parameter)
+    }
+
+    class ReadNode(override val sideEffect: SideEffectNode, override val control: ControlNode) : BuiltinCallNode {
+        override val dataInputs: List<DataNode> = listOf()
+    }
+
+    class FlushNode(override val sideEffect: SideEffectNode, override val control: ControlNode) : BuiltinCallNode {
+        override val dataInputs: List<DataNode> = listOf()
+    }
+
     // Binary operations
     sealed interface BinaryOperationNode : DataNode {
         val left: DataNode

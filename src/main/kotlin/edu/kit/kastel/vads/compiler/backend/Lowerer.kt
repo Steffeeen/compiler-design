@@ -83,6 +83,10 @@ private class Lowerer(private val irGraph: IrGraph) {
                 is IrNode.ReturnNode -> {}
                 is IrNode.SideEffectPhiNode -> TODO()
                 IrNode.StartNode -> node.controlSuccessors().forEach { visitNode(it) }
+                is IrNode.FlushNode -> TODO()
+                is IrNode.PrintNode -> TODO()
+                is IrNode.ReadNode -> TODO()
+                is IrNode.NormalCallNode -> TODO()
             }
         }
 
@@ -112,6 +116,10 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.ReturnNode -> generateReturnNode(controlNode)
             is IrNode.SideEffectPhiNode -> TODO()
             IrNode.StartNode -> {} // handled in the main lower function
+            is IrNode.FlushNode -> TODO()
+            is IrNode.PrintNode -> TODO()
+            is IrNode.ReadNode -> TODO()
+            is IrNode.NormalCallNode -> TODO()
         }
     }
 
@@ -185,6 +193,10 @@ private class Lowerer(private val irGraph: IrGraph) {
                 currentBlock.addFirst(AsmIr.Move(destination, source(node)))
             }
             is IrNode.PhiNode -> generatePhiNode(node, destination)
+            is IrNode.FlushNode -> TODO()
+            is IrNode.PrintNode -> TODO()
+            is IrNode.ReadNode -> TODO()
+            is IrNode.NormalCallNode -> TODO()
         }
     }
 
@@ -278,6 +290,10 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.LoopRegionNode -> "loop_region_${controlNode.hashCode()}"
             is IrNode.RegionNode -> "region_${controlNode.hashCode()}"
             is IrNode.SideEffectPhiNode -> "side_effect_phi_${controlNode.hashCode()}"
+            is IrNode.FlushNode -> TODO()
+            is IrNode.PrintNode -> TODO()
+            is IrNode.ReadNode -> TODO()
+            is IrNode.NormalCallNode -> TODO()
         }.replace("-", "_")
         return AsmIr.Label(name)
     }

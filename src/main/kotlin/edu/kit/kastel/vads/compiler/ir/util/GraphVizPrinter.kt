@@ -132,23 +132,14 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
 private fun IrNode.displayName(): String {
     val baseName = this.javaClass.simpleName.replace("Ir", "")
 
-    if (this is IrNode.IntegerConstantNode) {
-        return "$baseName [${this.value}]"
+    return when (this) {
+        is IrNode.IntegerConstantNode -> "$baseName [${this.value}]"
+        is IrNode.BooleanConstantNode -> "$baseName [${this.value}]"
+        is IrNode.IfProjectionNode -> "$baseName [${this.type}]"
+        is IrNode.PhiNode -> "$baseName [${this.name.asString()}]"
+        is IrNode.NormalCallNode -> "$baseName [${this.name.asString()}]"
+        else -> baseName
     }
-
-    if (this is IrNode.BooleanConstantNode) {
-        return "$baseName [${this.value}]"
-    }
-
-    if (this is IrNode.IfProjectionNode) {
-        return "$baseName [${this.type}]"
-    }
-
-    if (this is IrNode.PhiNode) {
-        return "$baseName [${this.name.asString()}]"
-    }
-
-    return baseName
 }
 
 private fun IrNode.color(): String {

@@ -67,8 +67,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.ContinueNode -> handleContinueNode(lastSideEffectNode, lastControlNode)
             is AstNode.ForNode -> handleForNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.WhileNode -> handleWhileNode(astNode, lastSideEffectNode, lastControlNode)
-            is AstNode.CallBuiltinNode -> TODO()
-            is AstNode.CallNormalNode -> TODO()
+            is AstNode.CallBuiltinNode -> createBuiltInCallNode(astNode, lastSideEffectNode, lastControlNode).lastTwo()
+            is AstNode.CallNormalNode -> createNormalCallNode(astNode, lastSideEffectNode, lastControlNode).lastTwo()
         }
     }
 
@@ -80,10 +80,12 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.LiteralNode -> Triple(createLiteralIrNode(astNode), lastSideEffectNode, lastControlNode)
             is AstNode.UnaryOperationNode -> createUnaryOperationIrNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.TernaryOperationNode -> handleTernaryOperationNode(astNode, lastSideEffectNode, lastControlNode)
-            is AstNode.CallBuiltinNode -> TODO()
-            is AstNode.CallNormalNode -> TODO()
+            is AstNode.CallBuiltinNode -> createBuiltInCallNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.CallNormalNode -> createNormalCallNode(astNode, lastSideEffectNode, lastControlNode)
         }
     }
+
+    private fun <A, B, C> Triple<A, B, C>.lastTwo() = second to third
 
     context(scopeNode: SymbolTable)
     private fun createBinaryOperationIrNode(
@@ -581,6 +583,40 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     private fun handleContinueNode(lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
         currentLoopInformation.addBackEdge(lastControlNode, lastSideEffectNode, scopeNode)
         return CONTROL_FLOW_END
+    }
+
+    context(scopeNode: SymbolTable)
+    private fun createBuiltInCallNode(astNode: AstNode.CallBuiltinNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
+        val (arguments, newSideEffectNode, newControlNode) = createFunctionCallArguments(astNode.arguments, lastSideEffectNode, lastControlNode)
+
+        val node = when (astNode.keyword) {
+            Token.KeywordType.PRINT -> IrNode.PrintNode(arguments.first(), newSideEffectNode, newControlNode)
+            Token.KeywordType.READ -> IrNode.ReadNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.FLUSH -> IrNode.FlushNode(newSideEffectNode, newControlNode)
+        }
+        return Triple(node, node, node)
+    }
+
+    context(scopeNode: SymbolTable)
+    private fun createNormalCallNode(astNode: AstNode.CallNormalNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
+        val (arguments, newSideEffectNode, newControlNode) = createFunctionCallArguments(astNode.arguments, lastSideEffectNode, lastControlNode)
+
+        val functionName = astNode.name.name
+        val node = IrNode.NormalCallNode(functionName, arguments, newSideEffectNode, newControlNode)
+        return Triple(node, node, node)
+    }
+
+    context(scopeNode: SymbolTable)
+    private fun createFunctionCallArguments(
+        arguments: List<AstNode.ExpressionNode>,
+        lastSideEffectNode: IrNode.SideEffectNode,
+        lastControlNode: IrNode.ControlNode
+    ): Triple<List<IrNode.DataNode>, IrNode.SideEffectNode, IrNode.ControlNode> {
+        val initial = Triple(emptyList<IrNode.DataNode>(), lastSideEffectNode, lastControlNode)
+        return arguments.fold(initial) { (accumulatedArgs, sideEffectNode, controlNode), argument ->
+            val (argIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(argument, sideEffectNode, controlNode)
+            Triple(accumulatedArgs + argIrNode, newSideEffectNode, newControlNode)
+        }
     }
 
     context(scopeNode: SymbolTable)
