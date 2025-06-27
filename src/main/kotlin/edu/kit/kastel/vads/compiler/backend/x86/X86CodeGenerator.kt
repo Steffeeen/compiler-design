@@ -62,6 +62,11 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
                 leave()
                 ret()
             }
+
+            is AsmIr.Call -> TODO()
+            is AsmIr.CallFlush -> TODO()
+            is AsmIr.CallPrint -> TODO()
+            is AsmIr.CallRead -> TODO()
         }
     }
 

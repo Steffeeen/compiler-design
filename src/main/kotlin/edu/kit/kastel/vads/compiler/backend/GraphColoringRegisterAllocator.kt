@@ -84,6 +84,10 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
             is AsmIr.Return -> handleOperand(instruction.value)
             is AsmIr.ConditionalJump -> handleOperand(instruction.condition)
             is AsmIr.Jump -> {}
+            is AsmIr.Call -> TODO()
+            is AsmIr.CallFlush -> TODO()
+            is AsmIr.CallPrint -> TODO()
+            is AsmIr.CallRead -> TODO()
         }
     }
 

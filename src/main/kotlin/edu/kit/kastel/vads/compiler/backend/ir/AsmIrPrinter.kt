@@ -7,7 +7,7 @@ fun asmIrToString(program: AsmIr.Program): String {
     val builder = StringBuilder()
 
     for (function in program.functions) {
-        builder.appendLine("Function: ${function.name}")
+        builder.appendLine("Function: ${function.name}(${function.parameters.joinToString(", ") { printOperand(it) }})")
         for (block in function.blocks) {
             builder.appendLine("${INDENT}Block: ${block.label.name}")
             for (instruction in block.instructions) {
@@ -35,6 +35,31 @@ private fun printInstruction(instruction: AsmIr.Instruction): String {
         is AsmIr.ConditionalJump -> "ConditionalJump ${printOperand(instruction.condition)}, ${instruction.target.name}"
         is AsmIr.Return -> "Return ${printOperand(instruction.value)}"
         is AsmIr.Move -> "${printOperand(instruction.destination)} = ${printOperand(instruction.source)}"
+        is AsmIr.Call -> printCall(instruction)
+        is AsmIr.CallBuiltin -> printCallBuiltin(instruction)
+    }
+}
+
+private fun printCall(call: AsmIr.Call): String {
+    val args = call.arguments.joinToString(", ") { printOperand(it) }
+    return if (call.destination != null) {
+        "${printOperand(call.destination)} = ${call.functionName}($args)"
+    } else {
+        "${call.functionName}($args)"
+    }
+}
+
+private fun printCallBuiltin(call: AsmIr.CallBuiltin): String {
+    val args = call.arguments.joinToString(", ") { printOperand(it) }
+    val name = when (call) {
+        is AsmIr.CallPrint -> "print"
+        is AsmIr.CallRead -> "read"
+        is AsmIr.CallFlush -> "flush"
+    }
+    return if (call.destination != null) {
+        "${printOperand(call.destination!!)} = $name($args)"
+    } else {
+        "$name($args)"
     }
 }
 

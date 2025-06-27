@@ -16,6 +16,25 @@ interface AsmIr {
 
     class Move(val destination: Register, val source: Operand) : Instruction
 
+    class Call(val functionName: String, val arguments: List<Operand>, val destination: Register? = null) : Instruction
+
+    sealed interface CallBuiltin : Instruction {
+        val arguments: List<Operand>
+        val destination: Register?
+    }
+
+    class CallPrint(val argument: Operand, override val destination: Register?) : CallBuiltin {
+        override val arguments: List<Operand> = listOf(argument)
+    }
+
+    class CallRead(override val destination: Register?) : CallBuiltin {
+        override val arguments: List<Operand> = listOf()
+    }
+
+    class CallFlush(override val destination: Register?) : CallBuiltin {
+        override val arguments: List<Operand> = listOf()
+    }
+
     class Jump(val target: Label) : Instruction
 
     class ConditionalJump(val condition: Register, val target: Label) : Instruction
@@ -47,7 +66,7 @@ interface AsmIr {
 
     data class BasicBlock(val label: Label, val instructions: List<Instruction>)
 
-    data class Function(val name: String, val blocks: List<BasicBlock>, val startBlock: BasicBlock, val returnBlock: BasicBlock)
+    data class Function(val name: String, val parameters: List<Register>, val blocks: List<BasicBlock>, val startBlock: BasicBlock, val returnBlock: BasicBlock)
 
     data class Program(val functions: List<Function>)
 }

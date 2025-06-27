@@ -52,13 +52,13 @@ private class Lowerer(private val irGraph: IrGraph) {
             block.setFinalJump(finalReturnBlock)
         }
 
-        // Finally, we put the data nodes for the conditions into the blocks.
-        generateIfNodeConditions()
+        // Finally, we put the data nodes for control nodes that have data input (e.g., Ifs and Calls) into the blocks.
+        generateControlNodeDataInputs()
 
         return AsmIr.Function(irGraph.name, parameterRegisters.values.toList(), blocks.values.map { it.build() }, startBlock.build(), finalReturnBlock.build())
     }
 
-    private fun generateIfNodeConditions() {
+    private fun generateControlNodeDataInputs() {
         val seen = mutableSetOf<IrNode.ControlNode>()
 
         fun visitNode(node: IrNode.ControlNode) {
@@ -84,10 +84,28 @@ private class Lowerer(private val irGraph: IrGraph) {
                 is IrNode.ReturnNode -> {}
                 is IrNode.SideEffectPhiNode -> TODO()
                 IrNode.StartNode -> node.controlSuccessors().forEach { visitNode(it) }
-                is IrNode.FlushNode -> TODO()
-                is IrNode.PrintNode -> TODO()
-                is IrNode.ReadNode -> TODO()
-                is IrNode.NormalCallNode -> TODO()
+
+                is IrNode.NormalCallNode -> {
+                    val argumentsToGenerate = node.arguments.filter { it in nodesToRegisters }.associateWith { nodesToRegisters[it]!! }
+                    val block = controlsToBlock[node]!!
+                    with(block) {
+                        // Generate the arguments in reverse order, as they are added to the start of the block
+                        argumentsToGenerate.toList().asReversed().forEach { (argNode, register) -> generateDataNode(argNode, register) }
+                    }
+                    node.controlSuccessors().forEach { visitNode(it) }
+                }
+
+                is IrNode.PrintNode -> {
+                    if (node.parameter in nodesToRegisters) {
+                        val destination = nodesToRegisters[node.parameter]!!
+                        val block = controlsToBlock[node]!!
+                        with(block) { generateDataNode(node.parameter, destination) }
+                    }
+                    node.controlSuccessors().forEach { visitNode(it) }
+                }
+
+                is IrNode.FlushNode -> node.controlSuccessors().forEach { visitNode(it) }
+                is IrNode.ReadNode -> node.controlSuccessors().forEach { visitNode(it) }
             }
         }
 
@@ -117,10 +135,47 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.ReturnNode -> generateReturnNode(controlNode)
             is IrNode.SideEffectPhiNode -> TODO()
             IrNode.StartNode -> {} // handled in the main lower function
-            is IrNode.FlushNode -> TODO()
-            is IrNode.PrintNode -> TODO()
-            is IrNode.ReadNode -> TODO()
-            is IrNode.NormalCallNode -> TODO()
+            is IrNode.NormalCallNode if controlNode.dataSuccessors().isNotEmpty() -> {
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+                generatedNodes.remove(controlNode)
+            }
+
+            is IrNode.NormalCallNode if controlNode.dataSuccessors().isEmpty() -> {
+                val arguments = controlNode.arguments.map { source(it) }
+
+                val instruction = AsmIr.Call(controlNode.name.asString(), arguments, null)
+                currentBlock.addLast(instruction)
+                controlsToBlock[controlNode] = currentBlock
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+            }
+
+            is IrNode.BuiltinCallNode if controlNode.dataSuccessors().isNotEmpty() -> {
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+                generatedNodes.remove(controlNode)
+            }
+
+            is IrNode.FlushNode if controlNode.dataSuccessors().isEmpty() -> {
+                val instruction = AsmIr.CallFlush(null)
+                currentBlock.addLast(instruction)
+                controlsToBlock[controlNode] = currentBlock
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+            }
+
+            is IrNode.PrintNode if controlNode.dataSuccessors().isEmpty() -> {
+                val instruction = AsmIr.CallPrint(source(controlNode.parameter), null)
+                currentBlock.addLast(instruction)
+                controlsToBlock[controlNode] = currentBlock
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+            }
+
+            is IrNode.ReadNode if controlNode.dataSuccessors().isEmpty() -> {
+                val instruction = AsmIr.CallRead(null)
+                currentBlock.addLast(instruction)
+                controlsToBlock[controlNode] = currentBlock
+                controlNode.controlSuccessors().forEach { generateControlNode(it) }
+            }
+
+            else -> error("should not happen")
         }
     }
 
@@ -190,15 +245,16 @@ private class Lowerer(private val irGraph: IrGraph) {
         when (node) {
             is IrNode.UnaryOperationNode -> generateUnaryOperation(node, destination)
             is IrNode.BinaryOperationNode -> generateBinaryOperation(node, destination)
-            is IrNode.ConstantNode<*> -> {
-                currentBlock.addFirst(AsmIr.Move(destination, source(node)))
-            }
+            is IrNode.ConstantNode<*> -> currentBlock.addFirst(AsmIr.Move(destination, source(node)))
             is IrNode.PhiNode -> generatePhiNode(node, destination)
-            is IrNode.FlushNode -> TODO()
-            is IrNode.PrintNode -> TODO()
-            is IrNode.ReadNode -> TODO()
-            is IrNode.NormalCallNode -> TODO()
-            is IrNode.ParameterNode -> TODO()
+            is IrNode.BuiltinCallNode -> generateBuiltinCallNode(node, destination)
+            is IrNode.NormalCallNode -> generateNormalCallNode(node, destination)
+            is IrNode.ParameterNode -> {
+                val source = source(node)
+                if (source != parameterRegisters[node]) {
+                    currentBlock.addFirst(AsmIr.Move(destination, source))
+                }
+            }
         }
     }
 
@@ -277,6 +333,44 @@ private class Lowerer(private val irGraph: IrGraph) {
         dataNodesToInstructions[operation] = instruction
     }
 
+    context(currentBlock: BasicBlockBuilder)
+    private fun generateBuiltinCallNode(node: IrNode.BuiltinCallNode, destination: AsmIr.Register?) {
+        val instruction = when (node) {
+            is IrNode.PrintNode -> {
+                val source = source(node.parameter)
+                if (source is AsmIr.Register) {
+                    generateDataNode(node.parameter, source)
+                }
+                AsmIr.CallPrint(source, destination)
+            }
+
+            is IrNode.ReadNode -> AsmIr.CallRead(destination)
+            is IrNode.FlushNode -> AsmIr.CallFlush(destination)
+        }
+        currentBlock.addFirst(instruction)
+        if (destination != null) {
+            nodesToRegisters[node] = destination
+        }
+    }
+
+    context(currentBlock: BasicBlockBuilder)
+    private fun generateNormalCallNode(node: IrNode.NormalCallNode, destination: AsmIr.Register?) {
+        val arguments = node.arguments.map {
+            val source = source(it)
+            if (it !is IrNode.ConstantNode<*>) {
+                generateDataNode(it, source as AsmIr.Register)
+            }
+            source
+        }
+
+        val instruction = AsmIr.Call(node.name.asString(), arguments, destination)
+        currentBlock.addFirst(instruction)
+
+        if (destination != null) {
+            nodesToRegisters[node] = destination
+        }
+    }
+
     private fun block(label: AsmIr.Label): BasicBlockBuilder {
         return blocks.getOrPut(label) { BasicBlockBuilder(label) }
     }
@@ -292,10 +386,8 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.LoopRegionNode -> "loop_region_${controlNode.hashCode()}"
             is IrNode.RegionNode -> "region_${controlNode.hashCode()}"
             is IrNode.SideEffectPhiNode -> "side_effect_phi_${controlNode.hashCode()}"
-            is IrNode.FlushNode -> TODO()
-            is IrNode.PrintNode -> TODO()
-            is IrNode.ReadNode -> TODO()
-            is IrNode.NormalCallNode -> TODO()
+            is IrNode.BuiltinCallNode -> error("BuiltinCallNode does not have a label")
+            is IrNode.NormalCallNode -> error("NormalCallNode does not have a label")
         }.replace("-", "_")
         return AsmIr.Label(name)
     }
@@ -336,10 +428,13 @@ private class Lowerer(private val irGraph: IrGraph) {
         val falseProjection = successors.find { it is IrNode.IfProjectionNode && it.type == IrNode.IfProjectionType.FALSE_BRANCH } ?: error("IfNode should have a false projection")
         return Pair(trueProjection as IrNode.IfProjectionNode, falseProjection as IrNode.IfProjectionNode)
     }
+
+    private fun IrNode.DataNode.dataSuccessors(): Set<IrNode.DataNode> = successorInfo.getDataSuccessors(this)
 }
 
 private class SuccessorInfo(irGraph: IrGraph) {
     private val controlSuccessors = mutableMapOf<IrNode.ControlNode, MutableSet<IrNode.ControlNode>>()
+    private val dataSuccessors = mutableMapOf<IrNode.DataNode, MutableSet<IrNode.DataNode>>()
     private val seen = mutableSetOf<IrNode>()
 
     init {
@@ -348,6 +443,10 @@ private class SuccessorInfo(irGraph: IrGraph) {
 
     fun getControlSuccessors(node: IrNode.ControlNode): Set<IrNode.ControlNode> {
         return controlSuccessors.getOrDefault(node, emptySet())
+    }
+
+    fun getDataSuccessors(node: IrNode.DataNode): Set<IrNode.DataNode> {
+        return dataSuccessors.getOrDefault(node, emptySet())
     }
 
     private fun calculateSuccessorInfo(node: IrNode) {
@@ -376,6 +475,13 @@ private class SuccessorInfo(irGraph: IrGraph) {
             controlSuccessors.getOrPut(node.control) { mutableSetOf() }.add(node)
             calculateSuccessorInfo(node.control)
         }
+
+        if (node is IrNode.DataNode) {
+            node.dataInputs.forEach {
+                dataSuccessors.getOrPut(it) { mutableSetOf() }.add(node)
+                calculateSuccessorInfo(it)
+            }
+        }
     }
 }
 
@@ -387,6 +493,7 @@ private class BasicBlockBuilder(val label: AsmIr.Label) {
         val insertionIndex = ensureAfter.maxOfOrNull { instructions.indexOf(it) }?.plus(1) ?: 0
         instructions.add(insertionIndex, instruction)
     }
+
     fun addLast(instruction: AsmIr.Instruction) = instructions.add(instruction)
     fun setFinalJump(block: BasicBlockBuilder) {
         finalJump = AsmIr.Jump(block.label)
