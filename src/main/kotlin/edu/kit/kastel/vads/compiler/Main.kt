@@ -75,7 +75,8 @@ private fun CompilerOptions.runCompiler() {
         // currently only the main function exists, thus only it gets printed
         val dotFile = outputFile.toAbsolutePath().parent.resolve("graph.dot")
         if (overwriteIrFile || !Files.exists(dotFile)) {
-            Files.writeString(dotFile, irProgram.graphs.find { it.name == "main" }!!.toDotVisualization(), StandardOpenOption.CREATE)
+            val string = irProgram.graphs.joinToString("\n") { it.toDotVisualization() }
+            Files.writeString(dotFile, string, StandardOpenOption.CREATE)
         } else {
             System.err.println("File '${dotFile.toAbsolutePath()}' already exists, skipping write.")
         }

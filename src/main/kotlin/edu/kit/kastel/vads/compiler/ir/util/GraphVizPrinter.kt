@@ -52,14 +52,15 @@ private data class GraphBuilder(
 
 fun IrGraph.toDotVisualization(): String = printIrGraphToDot(this)
 
-fun printIrGraphToDot(graph: IrGraph, name: String = "main"): String = buildString {
-    prefix(name)
+fun printIrGraphToDot(graph: IrGraph): String = buildString {
+    prefix(graph.name)
     print(graph)
     suffix()
 }
 
 private fun StringBuilder.prefix(name: String) {
     appendLine("digraph \"$name\" {")
+    appendIndented("label=\"$name\";")
     appendIndented("layout=dot;")
     appendIndented("node [shape=box];")
     appendIndented("overlap=false;")
@@ -138,6 +139,7 @@ private fun IrNode.displayName(): String {
         is IrNode.IfProjectionNode -> "$baseName [${this.type}]"
         is IrNode.PhiNode -> "$baseName [${this.name.asString()}]"
         is IrNode.NormalCallNode -> "$baseName [${this.name.asString()}]"
+        is IrNode.ParameterNode -> "$baseName [${this.name.asString()}]"
         else -> baseName
     }
 }

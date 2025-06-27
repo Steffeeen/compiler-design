@@ -19,6 +19,7 @@ private class Lowerer(private val irGraph: IrGraph) {
     private val controlsToBlock: MutableMap<IrNode.ControlNode, BasicBlockBuilder> = mutableMapOf()
     private val successorInfo = SuccessorInfo(irGraph)
     private val finalReturnBlock = block(AsmIr.Label("final_return"))
+    private val parameterRegisters = irGraph.parameters.associateWith { register(it) }
 
     fun lower(): AsmIr.Function {
         val startSuccessors = IrNode.StartNode.controlSuccessors()
@@ -54,7 +55,7 @@ private class Lowerer(private val irGraph: IrGraph) {
         // Finally, we put the data nodes for the conditions into the blocks.
         generateIfNodeConditions()
 
-        return AsmIr.Function(irGraph.name, blocks.values.map { it.build() }, startBlock.build(), finalReturnBlock.build())
+        return AsmIr.Function(irGraph.name, parameterRegisters.values.toList(), blocks.values.map { it.build() }, startBlock.build(), finalReturnBlock.build())
     }
 
     private fun generateIfNodeConditions() {
@@ -197,6 +198,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.PrintNode -> TODO()
             is IrNode.ReadNode -> TODO()
             is IrNode.NormalCallNode -> TODO()
+            is IrNode.ParameterNode -> TODO()
         }
     }
 

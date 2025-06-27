@@ -8,7 +8,7 @@ enum class SideEffectType {
 
 data class IrProgram(val graphs: List<IrGraph>)
 
-data class IrGraph(val endNode: IrNode.EndNode, val name: String)
+data class IrGraph(val endNode: IrNode.EndNode, val parameters: List<IrNode.ParameterNode>, val name: String)
 
 sealed interface IrNode {
 
@@ -38,10 +38,14 @@ sealed interface IrNode {
 
     class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 
+    data class ParameterNode(val name: SymbolName) : DataNode {
+        override val dataInputs: List<DataNode> = listOf()
+    }
+
     sealed interface CallNode : DataNode, SideEffectRelevantNode, ControlRelevantNode
 
-    class NormalCallNode(val name: SymbolName, val parameters: List<DataNode>, override val sideEffect: SideEffectNode, override val control: ControlNode) : CallNode {
-        override val dataInputs: List<DataNode> = parameters
+    class NormalCallNode(val name: SymbolName, val arguments: List<DataNode>, override val sideEffect: SideEffectNode, override val control: ControlNode) : CallNode {
+        override val dataInputs: List<DataNode> = arguments
     }
 
     sealed interface BuiltinCallNode : CallNode

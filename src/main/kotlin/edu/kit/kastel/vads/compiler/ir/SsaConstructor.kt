@@ -47,12 +47,18 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
     fun buildIr(function: AstNode.FunctionNode): IrGraph {
         val scopeNode = SymbolTable()
+
+        scopeNode.pushNamespace()
+        val parameters = function.parameters.map { IrNode.ParameterNode(it.name.name) }
+        parameters.forEach { scopeNode[it.name] = it }
+
+
         with(scopeNode) {
             createIrNodeForStatement(function.body, IrNode.StartNode, IrNode.StartNode)
         }
 
         val endNode = IrNode.EndNode(returnNodes)
-        return IrGraph(endNode, function.name.name.asString())
+        return IrGraph(endNode, parameters, function.name.name.asString())
     }
 
     context(scopeNode: SymbolTable)
