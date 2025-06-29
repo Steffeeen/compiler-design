@@ -541,7 +541,8 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val trueProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.TRUE_BRANCH)
         val falseProjectionNode = IrNode.IfProjectionNode(loopEntryNode, IrNode.IfProjectionType.FALSE_BRANCH)
 
-        currentLoopInformation.addAfterLoopEdge(falseProjectionNode, newSideEffectNode, scopeNode)
+        // duplicate the scope node as a variable may be written in the loop body, this should not be visible outside the loop as the loop body may not be executed
+        currentLoopInformation.addAfterLoopEdge(falseProjectionNode, newSideEffectNode, scopeNode.duplicate())
 
         val result = createIrNodeForStatement(body, newSideEffectNode, trueProjectionNode)
 
