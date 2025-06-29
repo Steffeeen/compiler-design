@@ -484,26 +484,3 @@ private class SuccessorInfo(irGraph: IrGraph) {
         }
     }
 }
-
-private class BasicBlockBuilder(val label: AsmIr.Label) {
-    private val instructions: MutableList<AsmIr.Instruction> = mutableListOf()
-    private var finalJump: AsmIr.Jump? = null
-
-    fun addFirst(instruction: AsmIr.Instruction, ensureAfter: Set<AsmIr.Instruction> = setOf()) {
-        val insertionIndex = ensureAfter.maxOfOrNull { instructions.indexOf(it) }?.plus(1) ?: 0
-        instructions.add(insertionIndex, instruction)
-    }
-
-    fun addLast(instruction: AsmIr.Instruction) = instructions.add(instruction)
-    fun setFinalJump(block: BasicBlockBuilder) {
-        finalJump = AsmIr.Jump(block.label)
-    }
-
-    fun build(): AsmIr.BasicBlock {
-        require(label.name == "final_return" || finalJump != null) { "Block ${label.name} does not have a final jump." }
-        if (finalJump != null) {
-            return AsmIr.BasicBlock(label, instructions + finalJump!!)
-        }
-        return AsmIr.BasicBlock(label, instructions)
-    }
-}
