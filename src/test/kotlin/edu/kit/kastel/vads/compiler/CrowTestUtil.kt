@@ -8,16 +8,22 @@ import kotlin.test.DefaultAsserter.fail
 data class CrowTestCase(
     val path: Path,
     val code: String,
+    val exitCode: Int?,
     val shouldFailParsing: Boolean,
     val shouldFailSemanticAnalysis: Boolean,
     val limitedToCategory: Boolean
 )
 
+private fun createSectionRegex(sectionName: String): Regex {
+    return Regex("""## $sectionName\s+```(.*?)```""", RegexOption.DOT_MATCHES_ALL)
+}
+
 object CrowTestUtil {
     private val TESTS_DIR = Paths.get("crow-tests")
-    private val PROGRAM_ARG_SECTION = Regex("""## ProgramArgumentFile\s+```(.*?)```""", RegexOption.DOT_MATCHES_ALL)
-    private val SHOULD_FAIL_SECTION = Regex("""## ShouldFail\s+```(.*?)```""", RegexOption.DOT_MATCHES_ALL)
-    private val LIMITED_TO_CATEGORY_SECTION = Regex("""## Limited to Category\s+```(.*?)```""", RegexOption.DOT_MATCHES_ALL)
+    private val PROGRAM_ARG_SECTION = createSectionRegex("ProgramArgumentFile")
+    private val SHOULD_FAIL_SECTION = createSectionRegex("ShouldFail")
+    private val LIMITED_TO_CATEGORY_SECTION = createSectionRegex("Limited to Category")
+    private val EXIT_CODE_SECTION = createSectionRegex("ExitCode")
 
     fun loadCrowTestCases(): List<CrowTestCase> {
         if (!Files.exists(TESTS_DIR)) {
@@ -38,6 +44,11 @@ object CrowTestUtil {
                 val code = PROGRAM_ARG_SECTION.find(content)?.groups?.get(1)?.value?.trim()
                 if (code.isNullOrBlank()) return@mapNotNull null
 
+                val exitCode = EXIT_CODE_SECTION.find(content)
+                    ?.groups?.get(1)?.value
+                    ?.trim()
+                    ?.toIntOrNull()
+
                 val shouldFailSection = SHOULD_FAIL_SECTION.find(content)
                     ?.groups?.get(1)?.value
                     ?.lines()
@@ -50,6 +61,7 @@ object CrowTestUtil {
                 CrowTestCase(
                     path = path,
                     code = code,
+                    exitCode = exitCode,
                     shouldFailParsing = shouldFailParsing,
                     shouldFailSemanticAnalysis = shouldFailSemanticAnalysis,
                     limitedToCategory = limitedToCategory
