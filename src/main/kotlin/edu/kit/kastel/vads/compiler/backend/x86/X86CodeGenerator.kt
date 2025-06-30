@@ -58,9 +58,11 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             is AsmIr.Jump -> jmp("${functionName}_${instruction.target.name}")
             is AsmIr.Move -> generateMove(instruction)
             is AsmIr.Return -> {
-                mov(X86Registers.EAX, instruction.value.toX86Operand())
-                leave()
-                ret()
+                with(registerAllocation[instruction]) {
+                    mov(X86Registers.EAX, instruction.value.toX86Operand())
+                    leave()
+                    ret()
+                }
             }
 
             is AsmIr.Call -> TODO()
@@ -72,59 +74,20 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
 
     context(registerAllocation: RegisterAllocation<X86Architecture>)
     private fun generateBinaryOperation(instruction: AsmIr.BinaryOperation) = with(builder) {
-        val allocatedDestination = registerAllocation[instruction.destination]
-        val leftSource = instruction.leftSource.toX86Operand()
-        val rightSource = instruction.rightSource.toX86Operand()
-
-        val isCommutative = instruction.operation.isCommutative
-
-        val source = when {
-            allocatedDestination == leftSource -> rightSource // The ideal case, the register allocator put the left source in the destination register, so we can just use the right operand as the source
-            isCommutative && allocatedDestination == rightSource -> leftSource // If the operation is commutative, we can use the left operand as the source
-            allocatedDestination == rightSource -> {
-                // If the destination also happens to be the right operand, we need to move the right operand into a temporary register to avoid overwriting it by putting the left operand in the destination
-                mov(X86Architecture.TEMP_REGISTER, rightSource)
-                if (allocatedDestination is StackLocation<X86Architecture> && leftSource is StackLocation<X86Architecture>) {
-                    // FIXME using eax here isn't really optimal, but it works for now as it is excluded from the register allocation
-                    // If both source and destination are stack locations, we need to use a temporary register
-                    mov(X86Registers.EAX, leftSource)
-                    mov(allocatedDestination, X86Registers.EAX)
-                } else {
-                    // Otherwise, we can directly move the left operand into the destination register
-                    mov(allocatedDestination, leftSource)
-                }
-                X86Architecture.TEMP_REGISTER
-            }
-
-            else -> {
-                // The default case, as we are translating from a three-address IR, we move the left operand into the destination register
-                if (allocatedDestination is StackLocation<X86Architecture> && leftSource is StackLocation<X86Architecture>) {
-                    // If both source and destination are stack locations, we need to use a temporary register
-                    mov(X86Architecture.TEMP_REGISTER, leftSource)
-                    mov(allocatedDestination, X86Architecture.TEMP_REGISTER)
-                } else {
-                    // Otherwise, we can directly move the left operand into the destination register
-                    mov(allocatedDestination, leftSource)
-                }
-                rightSource
-            }
+        val (destination, leftSource, rightSource) = with(registerAllocation[instruction]) {
+            val destination = instruction.destination.toX86Register()
+            val leftSource = instruction.leftSource.toX86Operand()
+            val rightSource = instruction.rightSource.toX86Operand()
+            Triple(destination, leftSource, rightSource)
         }
 
-        val destination = when {
-            allocatedDestination is StackLocation<X86Architecture> && source is StackLocation<X86Architecture> -> {
-                // If both source and destination are stack locations, we need to use a temporary register
-                mov(X86Architecture.TEMP_REGISTER, allocatedDestination)
-                X86Architecture.TEMP_REGISTER
-            }
-
-            instruction.operation == MULTIPLY && allocatedDestination is StackLocation<X86Architecture> -> {
-                // FIXME: again using eax here isn't really optimal, but it works for now as it is excluded from the register allocation
-                mov(X86Registers.EAX, allocatedDestination)
-                X86Registers.EAX
-            }
-
+        val isCommutative = instruction.operation.isCommutative
+        val source = when {
+            isCommutative && rightSource == destination -> leftSource
+            destination == leftSource -> rightSource
             else -> {
-                allocatedDestination
+                mov(destination, leftSource)
+                rightSource
             }
         }
 
@@ -139,12 +102,7 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             BITWISE_OR -> or(destination, source)
             BITWISE_XOR -> xor(destination, source)
 
-            EQUAL, NOT_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL -> generateCompare(instruction.operation, destination, source)
-        }
-
-        if (destination != allocatedDestination) {
-            // If we used a temporary register, we need to move the result back to the allocated destination
-            mov(allocatedDestination, destination)
+            EQUAL, NOT_EQUAL, LESS_THAN, LESS_THAN_OR_EQUAL, GREATER_THAN, GREATER_THAN_OR_EQUAL -> generateCompare(instruction.operation, destination, rightSource)
         }
     }
 
@@ -189,14 +147,8 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
 
     context(registerAllocation: RegisterAllocation<X86Architecture>)
     private fun generateUnaryOperation(instruction: AsmIr.UnaryOperation) = with(builder) {
-        val (source, destination) = when {
-            instruction.destination.toX86Operand() is StackLocation<X86Architecture> && instruction.source.toX86Operand() is StackLocation<X86Architecture> -> {
-                // If both source and destination are stack locations, we need to use a temporary register
-                mov(X86Architecture.TEMP_REGISTER, instruction.destination.toX86Location())
-                Pair(instruction.source.toX86Operand(), X86Architecture.TEMP_REGISTER)
-            }
-
-            else -> Pair(instruction.source.toX86Operand(), instruction.destination.toX86Location())
+        val (destination, source) = with(registerAllocation[instruction]) {
+            instruction.destination.toX86Register() to instruction.source.toX86Operand()
         }
 
         if (destination != source) {
@@ -217,34 +169,55 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
 
     context(registerAllocation: RegisterAllocation<X86Architecture>, functionName: String)
     private fun generateConditionalJump(instruction: AsmIr.ConditionalJump) = with(builder) {
-        val register = registerAllocation[instruction.condition]
+        val register = with(registerAllocation[instruction]) {
+            instruction.condition.toX86Register()
+        }
         test(register, register)
         jne("${functionName}_${instruction.target.name}")
     }
 
     context(registerAllocation: RegisterAllocation<X86Architecture>)
     private fun generateMove(instruction: AsmIr.Move) = with(builder) {
-        val destination = instruction.destination.toX86Location()
-        val source = instruction.source.toX86Operand()
-
-        if (destination is StackLocation<X86Architecture> && source is StackLocation<X86Architecture>) {
-            // If both source and destination are stack locations, we need to use a temporary register
-            mov(X86Architecture.TEMP_REGISTER, source)
-            mov(destination, X86Architecture.TEMP_REGISTER)
-            return
+        val (destination, source) = with(registerAllocation[instruction]) {
+            instruction.destination.toX86Register() to instruction.source.toX86Operand()
         }
 
         mov(destination, source)
     }
 
-    context(registerAllocation: RegisterAllocation<X86Architecture>)
-    private fun AsmIr.Register.toX86Location() = registerAllocation[this]
-
-    context(registerAllocation: RegisterAllocation<X86Architecture>)
+    context(registerToInformation: Map<AsmIr.Register, AllocationInformation<X86Architecture>>)
     private fun AsmIr.Operand.toX86Operand(): Operand<X86Architecture> {
         return when (this) {
-            is AsmIr.Register -> registerAllocation[this]
+            is AsmIr.Register -> {
+                val allocationInformation = registerToInformation[this]!!
+                when (allocationInformation) {
+                    is AllocationInformation.NormalRegister<X86Architecture> -> allocationInformation.register
+                    is AllocationInformation.Spill<X86Architecture> -> spill(allocationInformation.register, allocationInformation.spillLocation)
+                    is AllocationInformation.Reload<X86Architecture> -> reload(allocationInformation.reloadLocation, allocationInformation.register)
+                    is AllocationInformation.SpillAndReload<X86Architecture> -> {
+                        spill(allocationInformation.register, allocationInformation.spillLocation)
+                        reload(allocationInformation.reloadLocation, allocationInformation.register)
+                    }
+                }
+            }
             is AsmIr.Immediate -> X86Immediate(value)
         }
+    }
+
+    context(registerToInformation: Map<AsmIr.Register, AllocationInformation<X86Architecture>>)
+    private fun AsmIr.Register.toX86Register(): Register<X86Architecture> {
+        val register = this.toX86Operand()
+        require(register is Register<X86Architecture>)
+        return register
+    }
+
+    private fun spill(register: Register<X86Architecture>, spillLocation: Location<X86Architecture>): Operand<X86Architecture> {
+        builder.mov(spillLocation, register)
+        return register
+    }
+
+    private fun reload(reloadLocation: Location<X86Architecture>, register: Register<X86Architecture>): Operand<X86Architecture> {
+        builder.mov(register, reloadLocation)
+        return register
     }
 }

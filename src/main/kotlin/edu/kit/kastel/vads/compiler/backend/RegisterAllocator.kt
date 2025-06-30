@@ -3,12 +3,15 @@ package edu.kit.kastel.vads.compiler.backend
 import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 
 interface RegisterAllocation<T : Architecture> {
-    operator fun get(operand: AsmIr.Register): Location<T>
+    operator fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>>
     val numberOfStackVariables: Int
 }
 
-data class RegisterInformation<T : Architecture>(val registers: Map<AsmIr.Operand, Location<T>>, val additionalRegisters: Map<AsmIr.Operand, Register<T>> = mapOf()) {
-    operator fun get(operand: AsmIr.Operand): Location<T> = registers[operand]!!
+sealed interface AllocationInformation<T : Architecture> {
+    data class NormalRegister<T : Architecture>(val register: Register<T>) : AllocationInformation<T>
+    data class Spill<T : Architecture>(val register: Register<T>, val spillLocation: StackLocation<T>) : AllocationInformation<T>
+    data class Reload<T : Architecture>(val register: Register<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
+    data class SpillAndReload<T : Architecture>(val register: Register<T>, val spillLocation: StackLocation<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
 }
 
 sealed interface RegisterConstraint<T : Architecture> {
@@ -21,7 +24,7 @@ sealed interface RegisterConstraint<T : Architecture> {
 
 interface RegisterAllocator<T : Architecture> {
     fun allocateRegisters(
-        availableRegisters: List<Register<T>>,
+        availableRegisters: Set<Register<T>>,
         function: AsmIr.Function,
         stackSlotCreator: (Int) -> StackLocation<T>,
     ): RegisterAllocation<T>

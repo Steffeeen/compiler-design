@@ -1,9 +1,20 @@
 package edu.kit.kastel.vads.compiler.backend
 
 import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
+import kotlin.math.max
+import kotlin.math.min
 
-data class SimpleRegisterAllocation<T : Architecture>(override val numberOfStackVariables: Int, val allocation: Map<AsmIr.Register, Location<T>>) : RegisterAllocation<T> {
-    override fun get(operand: AsmIr.Register): Location<T> = allocation[operand]!!
+private data class SimpleRegisterAllocation<T : Architecture>(
+    override val numberOfStackVariables: Int,
+    private val allocations: Map<AsmIr.Register, AllocationForRegister<T>>,
+) : RegisterAllocation<T> {
+    override fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>> {
+        return instruction.usedRegisters().associateWith { allocations[it]!![instruction] }
+    }
+}
+
+data class AllocationForRegister<T : Architecture>(private val map: Map<AsmIr.Instruction, AllocationInformation<T>>) {
+    operator fun get(instruction: AsmIr.Instruction): AllocationInformation<T> = map[instruction]!!
 }
 
 private data class Predecessors(val predecessors: Map<AsmIr.BasicBlock, Set<AsmIr.BasicBlock>>) {
@@ -14,21 +25,27 @@ private data class Successors(val successors: Map<AsmIr.BasicBlock, Set<AsmIr.Ba
     operator fun get(block: AsmIr.BasicBlock): Set<AsmIr.BasicBlock> = successors[block]!!
 }
 
-private data class LiveRange(val ranges: List<IntRange>) {
+private class LiveRange() {
+    private var _min: Int? = null
+    val min: Int get() = _min!!
+    private var _max: Int? = null
+    val max: Int get() = _max!!
+
+    fun extendLower(value: Int) {
+        _min = if (_min == null) value else min(value, _min!!)
+    }
+
+    fun extendUpper(value: Int) {
+        _max = if (_max == null) value else max(value, _max!!)
+    }
+
     fun overlaps(other: LiveRange): Boolean {
-        for (thisRange in ranges) {
-            for (otherRange in other.ranges) {
-                if (thisRange.intersect(otherRange).isNotEmpty()) {
-                    return true
-                }
-            }
-        }
-        return false
+        return (this.min <= other.max && this.max >= other.min) || (other.min <= this.max && other.max >= this.min)
     }
 }
 
 class GraphColoringRegisterAllocator<T : Architecture> : RegisterAllocator<T> {
-    override fun allocateRegisters(availableRegisters: List<Register<T>>, function: AsmIr.Function, stackSlotCreator: (Int) -> StackLocation<T>): RegisterAllocation<T> {
+    override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function, stackSlotCreator: (Int) -> StackLocation<T>): RegisterAllocation<T> {
         val predecessors = calculatePredecessors(function)
         val successors = calculateSuccessors(predecessors)
 
@@ -49,61 +66,120 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
 
     val interferenceGraph = buildInterferenceGraph(instructionNumbering, function.returnBlock)
 
-    val registerAllocation = mutableMapOf<AsmIr.Register, Location<T>>()
+    val allocations = mutableMapOf<AsmIr.Register, MutableMap<AsmIr.Instruction, AllocationInformation<T>>>()
+    val currentAllocations = mutableMapOf<AsmIr.Register, Location<T>>()
 
     for (instruction in instructionNumbering.entries.sortedBy { it.value }.map { it.key }) {
-        fun handleOperand(operand: AsmIr.Operand) {
+        fun handleOperand(instruction: AsmIr.Instruction, operand: AsmIr.Operand) {
             if (operand is AsmIr.Immediate) {
                 return
             }
+            require(operand is AsmIr.Register) // should be a register
 
-            require(operand is AsmIr.Register)
-            val interfering = (interferenceGraph[operand]!!).mapNotNull { registerAllocation[it] }
-            val registerAvailableForOperand = availableRegisters - interfering
-            val register = registerAvailableForOperand.first()
-            registerAllocation[operand] = register
+            if (operand in currentAllocations && currentAllocations[operand]!! is Register<T>) {
+                allocations[operand]!![instruction] = AllocationInformation.NormalRegister(currentAllocations[operand] as Register<T>)
+                return
+            }
+
+            val interfering = (interferenceGraph[operand] ?: setOf()).mapNotNull { currentAllocations[it] }
+            val available = availableRegisters - interfering
+
+            val locationToUse = available.first()
+            if (locationToUse is Register<T>) {
+                // If we have a register available, use it
+                if (operand in currentAllocations) {
+                    // reload already allocated register
+                    val reloadLocation = currentAllocations[operand]!!
+                    require(reloadLocation is StackLocation<T>) // should be a stack location
+                    allocations.getOrPut(operand) { mutableMapOf() }[instruction] = AllocationInformation.Reload(locationToUse, reloadLocation)
+                } else {
+                    // first time we see this operand, allocate a register
+                    currentAllocations[operand] = locationToUse
+                    allocations.getOrPut(operand) { mutableMapOf() }[instruction] = AllocationInformation.NormalRegister(locationToUse)
+                }
+
+                return
+            }
+
+            // No register available, we need to spill
+            require(locationToUse is StackLocation<T>) // should be a stack location
+
+            // FIXME: Implement a proper heuristic to choose which register to spill
+            // for now, choose a register to spill randomly
+            val (asmRegister, registerToSpill) = currentAllocations.entries.filter { it.value is Register<T> }.randomOrNull()!!
+
+            val allocationInformation = if (operand in currentAllocations) {
+                val reloadLocation = currentAllocations[operand]!!
+                require(reloadLocation is StackLocation<T>) { "should be a stack location" }
+                AllocationInformation.SpillAndReload(registerToSpill as Register<T>, locationToUse, reloadLocation)
+            } else {
+                AllocationInformation.Spill(registerToSpill as Register<T>, locationToUse)
+            }
+
+            currentAllocations[asmRegister] = locationToUse
+            currentAllocations[operand] = registerToSpill
+            allocations.getOrPut(operand) { mutableMapOf() }[instruction] = allocationInformation
         }
 
         when (instruction) {
             is AsmIr.BinaryOperation -> {
-                handleOperand(instruction.destination)
-                handleOperand(instruction.leftSource)
-                handleOperand(instruction.rightSource)
+                handleOperand(instruction, instruction.destination)
+                handleOperand(instruction, instruction.leftSource)
+                handleOperand(instruction, instruction.rightSource)
             }
 
             is AsmIr.UnaryOperation -> {
-                handleOperand(instruction.destination)
-                handleOperand(instruction.source)
+                handleOperand(instruction, instruction.destination)
+                handleOperand(instruction, instruction.source)
             }
 
             is AsmIr.Move -> {
-                handleOperand(instruction.destination)
-                handleOperand(instruction.source)
+                handleOperand(instruction, instruction.destination)
+                handleOperand(instruction, instruction.source)
             }
 
-            is AsmIr.Return -> handleOperand(instruction.value)
-            is AsmIr.ConditionalJump -> handleOperand(instruction.condition)
+            is AsmIr.Return -> handleOperand(instruction, instruction.value)
+            is AsmIr.ConditionalJump -> handleOperand(instruction, instruction.condition)
             is AsmIr.Jump -> {}
-            is AsmIr.Call -> TODO()
-            is AsmIr.CallFlush -> TODO()
-            is AsmIr.CallPrint -> TODO()
-            is AsmIr.CallRead -> TODO()
+            is AsmIr.Call -> {
+                instruction.destination?.let { handleOperand(instruction, it) }
+                instruction.arguments.forEach { handleOperand(instruction, it) }
+            }
+
+            is AsmIr.CallBuiltin -> {
+                instruction.destination?.let { handleOperand(instruction, it) }
+                instruction.arguments.forEach { handleOperand(instruction, it) }
+            }
         }
     }
 
-    val numberOfStackVariables = registerAllocation.values.mapNotNull { it as? StackLocation<T> }.maxOfOrNull { it.index }?.plus(1) ?: 0
-
-    return SimpleRegisterAllocation(numberOfStackVariables, registerAllocation)
+    val maxSpillIndex1 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.Spill<T>>().maxOfOrNull { it.spillLocation.index }
+    val maxSpillIndex2 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.SpillAndReload<T>>().maxOfOrNull { it.spillLocation.index }
+    val numberOfStackVariables = maxOf(maxSpillIndex1 ?: 0, maxSpillIndex2 ?: 0) + 1 // +1 because we start counting from 0
+    val finalAllocations = allocations.mapValues { AllocationForRegister(it.value) }
+    return SimpleRegisterAllocation(numberOfStackVariables, finalAllocations)
 }
 
 context(predecessors: Predecessors, successors: Successors)
 private fun buildInterferenceGraph(instructionNumbering: Map<AsmIr.Instruction, Int>, returnBlock: AsmIr.BasicBlock): Map<AsmIr.Register, Set<AsmIr.Register>> {
-    val liveness = calculateLiveness(instructionNumbering, returnBlock)
+    val liveness = calculateLiveness(returnBlock)
+
+    val liveRanges = mutableMapOf<AsmIr.Register, LiveRange>()
+
+    for ((instruction, number) in instructionNumbering.entries.sortedBy { it.value }) {
+        val liveVariables = liveness[instruction] ?: emptySet()
+        for (operand in liveVariables) {
+            val range = liveRanges.getOrPut(operand) { LiveRange() }
+            range.extendLower(number)
+            range.extendUpper(number)
+        }
+    }
+
     val interferenceGraph = mutableMapOf<AsmIr.Register, MutableSet<AsmIr.Register>>()
 
-    for ((register, liveRange) in liveness) {
+    for ((register, liveRange) in liveRanges) {
         interferenceGraph[register] = mutableSetOf()
-        for ((otherRegister, otherLiveRange) in liveness) {
+        for ((otherRegister, otherLiveRange) in liveRanges) {
             if (register != otherRegister && liveRange.overlaps(otherLiveRange)) {
                 interferenceGraph[register]!!.add(otherRegister)
             }
@@ -114,76 +190,90 @@ private fun buildInterferenceGraph(instructionNumbering: Map<AsmIr.Instruction, 
 }
 
 context(predecessors: Predecessors, successors: Successors)
-private fun calculateLiveness(instructionNumbering: Map<AsmIr.Instruction, Int>, returnBlock: AsmIr.BasicBlock): Map<AsmIr.Register, LiveRange> {
-    fun AsmIr.Instruction.number() = instructionNumbering[this]!!
+private fun calculateLiveness(returnBlock: AsmIr.BasicBlock): Map<AsmIr.Instruction, Set<AsmIr.Register>> {
+    val inLive = mutableMapOf<AsmIr.BasicBlock, Set<AsmIr.Register>>()
+    val outLive = mutableMapOf<AsmIr.BasicBlock, Set<AsmIr.Register>>()
+    val liveVariables = mutableMapOf<AsmIr.Instruction, Set<AsmIr.Register>>()
 
-    val liveRanges = mutableMapOf<AsmIr.Register, MutableList<IntRange>>()
+    val worklist = mutableListOf(returnBlock)
 
-    val lastUse = mutableMapOf<AsmIr.Register, Int>()
+    while (worklist.isNotEmpty()) {
+        val block = worklist.removeFirst()
+        val oldInLive = inLive[block] ?: setOf()
 
-    fun recordDefinition(operand: AsmIr.Operand, instructionNumber: Int) {
-        if (operand is AsmIr.Register) {
-            val start = instructionNumber + 1
-            val end = lastUse[operand]!!
-            lastUse.remove(operand)
-            liveRanges.getOrPut(operand) { mutableListOf() }.add(IntRange(start, end))
+        outLive[block] = block.successors().flatMap { inLive[it] ?: emptySet() }.toSet()
+        val liveInCurrentBlock = outLive[block]!!.toMutableSet()
+
+        fun recordDefinition(register: AsmIr.Register, killed: MutableSet<AsmIr.Register>) {
+            killed.add(register)
         }
-    }
 
-    fun recordUse(operand: AsmIr.Operand, instructionNumber: Int) {
-        if (operand is AsmIr.Register && operand !in lastUse) {
-            lastUse[operand] = instructionNumber
+        fun recordUse(operand: AsmIr.Operand) {
+            if (operand is AsmIr.Register) {
+                liveInCurrentBlock.add(operand)
+            }
         }
-    }
-
-    // Walk blocks backwards using breadth-first search
-    val queue = mutableListOf(returnBlock)
-    val visited = mutableSetOf<AsmIr.BasicBlock>()
-
-    while (queue.isNotEmpty()) {
-        val block = queue.removeFirst()
-        if (visited.contains(block)) continue
-        visited.add(block)
 
         for (instruction in block.instructions.reversed()) {
+            val killed = mutableSetOf<AsmIr.Register>()
             when (instruction) {
                 is AsmIr.BinaryOperation -> {
-                    recordDefinition(instruction.destination, instruction.number())
-                    recordUse(instruction.leftSource, instruction.number())
-                    recordUse(instruction.rightSource, instruction.number())
+                    recordUse(instruction.leftSource)
+                    recordUse(instruction.rightSource)
+
+                    if (instruction.operation.isCommutative) {
+                        // If the operation is commutative, we can have the destination and the sources not interfere as we can swap operands and can thus avoid the situation
+                        // where the destination and the right source are the same. If the destination is the same as the right source and the operation is not commutative,
+                        // we would overwrite the right source by moving the left source into the destination. We have to do that move to transform the three-address AsmIr
+                        // into two-address assembly like X86.
+                        liveInCurrentBlock.remove(instruction.destination)
+                    } else {
+                        // If the operation is not commutative, the destination and all the sources have to interfere to avoid the situation described above where the destination
+                        // is the same as the right source.
+                        killed.add(instruction.destination)
+                    }
+                    recordDefinition(instruction.destination, killed)
                 }
 
                 is AsmIr.UnaryOperation -> {
-                    recordDefinition(instruction.destination, instruction.number())
-                    recordUse(instruction.source, instruction.number())
-                }
-
-                is AsmIr.Return -> {
-                    recordUse(instruction.value, instruction.number())
+                    recordUse(instruction.source)
+                    recordDefinition(instruction.destination, killed)
                 }
 
                 is AsmIr.Move -> {
-                    recordDefinition(instruction.destination, instruction.number())
-                    recordUse(instruction.source, instruction.number())
+                    recordUse(instruction.source)
+                    recordDefinition(instruction.destination, killed)
                 }
 
-                is AsmIr.ConditionalJump -> {
-                    recordUse(instruction.condition, instruction.number())
+                is AsmIr.Call -> {
+                    instruction.arguments.forEach { recordUse(it) }
+                    instruction.destination?.let { recordDefinition(it, killed) }
                 }
 
-                else -> {}
+                is AsmIr.CallBuiltin -> {
+                    instruction.arguments.forEach { recordUse(it) }
+                    instruction.destination?.let { recordDefinition(it, killed) }
+                }
+
+                is AsmIr.Return -> recordUse(instruction.value)
+                is AsmIr.ConditionalJump -> recordUse(instruction.condition)
+                is AsmIr.Jump -> {}
             }
+
+            liveVariables[instruction] = liveInCurrentBlock.toSet()
+            liveInCurrentBlock.removeAll(killed)
         }
 
-        for (pred in block.predecessors()) {
-            if (!visited.contains(pred)) {
-                queue.add(pred)
+        inLive[block] = liveInCurrentBlock
+
+        if (oldInLive != inLive[block]) {
+            for (pred in block.predecessors()) {
+                worklist.add(pred)
             }
         }
     }
 
-    require(lastUse.isEmpty())
-    return liveRanges.mapValues { LiveRange(it.value) }
+    return liveVariables
 }
 
 context(successors: Successors)

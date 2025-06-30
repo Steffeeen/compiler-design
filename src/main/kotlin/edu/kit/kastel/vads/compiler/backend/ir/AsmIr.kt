@@ -1,7 +1,9 @@
 package edu.kit.kastel.vads.compiler.backend.ir
 
 interface AsmIr {
-    sealed interface Instruction
+    sealed interface Instruction {
+        fun usedRegisters(): Set<Register>
+    }
 
     sealed interface Operand
     data class Register(val id: Int) : Operand {
@@ -10,17 +12,26 @@ interface AsmIr {
     data class Immediate(val value: UInt) : Operand
     data class Label(val name: String)
 
-    class BinaryOperation(val operation: BinaryOperationType, val destination: Register, val leftSource: Operand, val rightSource: Operand) : Instruction
+    class BinaryOperation(val operation: BinaryOperationType, val destination: Register, val leftSource: Operand, val rightSource: Operand) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOfNotNull(destination, leftSource as? Register, rightSource as? Register)
+    }
 
-    class UnaryOperation(val operation: UnaryOperationType, val destination: Register, val source: Operand) : Instruction
+    class UnaryOperation(val operation: UnaryOperationType, val destination: Register, val source: Operand) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOfNotNull(destination, source as? Register)
+    }
 
-    class Move(val destination: Register, val source: Operand) : Instruction
+    class Move(val destination: Register, val source: Operand) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOfNotNull(destination, source as? Register)
+    }
 
-    class Call(val functionName: String, val arguments: List<Operand>, val destination: Register? = null) : Instruction
+    class Call(val functionName: String, val arguments: List<Operand>, val destination: Register? = null) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOfNotNull(destination) + arguments.mapNotNull { it as? Register }
+    }
 
     sealed interface CallBuiltin : Instruction {
         val arguments: List<Operand>
         val destination: Register?
+        override fun usedRegisters(): Set<Register> = setOfNotNull(destination) + arguments.mapNotNull { it as? Register }
     }
 
     class CallPrint(val argument: Operand, override val destination: Register?) : CallBuiltin {
@@ -35,11 +46,17 @@ interface AsmIr {
         override val arguments: List<Operand> = listOf()
     }
 
-    class Jump(val target: Label) : Instruction
+    class Jump(val target: Label) : Instruction {
+        override fun usedRegisters(): Set<Register> = emptySet()
+    }
 
-    class ConditionalJump(val condition: Register, val target: Label) : Instruction
+    class ConditionalJump(val condition: Register, val target: Label) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOf(condition)
+    }
 
-    class Return(val value: Operand) : Instruction
+    class Return(val value: Operand) : Instruction {
+        override fun usedRegisters(): Set<Register> = setOfNotNull(value as? Register)
+    }
 
     enum class BinaryOperationType(val isCommutative: Boolean) {
         ADD(true),

@@ -9,7 +9,7 @@ interface Architecture {
     fun createCodeGenerator(): CodeGenerator<out Architecture>
     fun createAssembler(): Assembler<out Architecture>
     fun createConstraintGenerator(): ConstraintGenerator<out Architecture>
-    fun getAvailableRegisters(): List<Register<out Architecture>>
+    fun getAvailableRegisters(): Set<Register<out Architecture>>
 }
 
 object X86Architecture : Architecture {
@@ -27,6 +27,6 @@ object X86Architecture : Architecture {
     override fun createCodeGenerator(): CodeGenerator<out X86Architecture> = X86CodeGenerator()
     override fun createAssembler(): Assembler<out X86Architecture> = X86Assembler()
     override fun createConstraintGenerator(): ConstraintGenerator<out X86Architecture> = X86ConstraintGenerator
-    override fun getAvailableRegisters(): List<Register<X86Architecture>> = X86Registers.entries - RESERVED_REGISTERS
+    override fun getAvailableRegisters(): Set<Register<X86Architecture>> = (X86Registers.entries - RESERVED_REGISTERS).toSet()
 }
 
