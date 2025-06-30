@@ -33,8 +33,10 @@ class X86Assembler : Assembler<X86Architecture> {
             .replace(Regex("^main:", RegexOption.MULTILINE), "_main:")
             .replace(Regex("^\\.global main$", RegexOption.MULTILINE), "global _main")
             .replace(Regex("^\\.global ", RegexOption.MULTILINE), "global ")
+            .replace(Regex("^\\.extern ", RegexOption.MULTILINE), "extern ")
             .replace(Regex("^\\.text", RegexOption.MULTILINE), "section .text")
-            .replace(".type @function", "")
+            .replace("#", ";")
+            .replace(Regex(".type (.*) @function", RegexOption.MULTILINE), "")
             .replace(".intel_syntax noprefix", "")
             .replace("DWORD PTR", "DWORD")
         Files.writeString(tempFile, fixedAssembly)
@@ -45,14 +47,12 @@ class X86Assembler : Assembler<X86Architecture> {
                 return
             }
             runProcessAndMaybePrintError(
-                "ld",
-                "-o",
-                binary.toAbsolutePath().toString(),
+                "clang",
                 objectFile.toAbsolutePath().toString(),
-                "-L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib",
-                "-lSystem",
-                "-macos_version_min",
-                "10.14"
+                "-arch",
+                "x86_64",
+                "-o",
+                binary.toAbsolutePath().toString()
             )
         }
     }

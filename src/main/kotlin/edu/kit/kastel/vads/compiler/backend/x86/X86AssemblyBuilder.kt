@@ -69,7 +69,7 @@ class X86AssemblyBuilder {
         global(name, SymbolType.FUNCTION)
         enter((numberOfStackVariables * 4).toImmediate())
         block()
-        builder.appendLine("; End of function $name")
+        builder.appendLine("# End of function $name")
         builder.appendLine()
     }
 
@@ -80,8 +80,12 @@ class X86AssemblyBuilder {
 
     fun global(name: String, type: SymbolType) {
         builder.appendLine(".global $name")
-        builder.appendLine(".type $type")
+        builder.appendLine(".type $name $type")
         builder.appendLine("$name:")
+    }
+
+    fun extern(name: String) {
+        builder.appendLine(".extern $name")
     }
 
     private fun generateInstruction(instruction: String, vararg operands: Operand<X86Architecture>) {

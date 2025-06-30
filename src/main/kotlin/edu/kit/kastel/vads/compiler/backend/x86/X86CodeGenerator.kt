@@ -9,6 +9,9 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
     private val builder = X86AssemblyBuilder()
 
     override fun generateCode(asmProgram: AsmIr.Program, registerAllocations: Map<AsmIr.Function, RegisterAllocation<X86Architecture>>): Assembly<X86Architecture> {
+        builder.extern("putchar")
+        builder.extern("getchar")
+        builder.extern("fflush")
         builder.global("main", SymbolType.FUNCTION)
         builder.call("mainimpl")
         builder.ret()
@@ -67,9 +70,7 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             }
 
             is AsmIr.Call -> generateCall(instruction)
-            is AsmIr.CallFlush -> TODO()
-            is AsmIr.CallPrint -> TODO()
-            is AsmIr.CallRead -> TODO()
+            is AsmIr.CallBuiltin -> generateBuiltinCall(instruction)
         }
     }
 
@@ -192,7 +193,41 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             instruction.destination?.toX86Register() to instruction.arguments.map { it.toX86Operand() }
         }
 
-        val baseIndex = registerAllocation.numberOfStackVariables
+        generateCallImpl(instruction.functionName, destination, arguments, registerAllocation.numberOfStackVariables)
+    }
+
+    context(registerAllocation: RegisterAllocation<X86Architecture>)
+    private fun generateBuiltinCall(instruction: AsmIr.CallBuiltin) = with(builder) {
+        val (destination, argumentsFromProgram) = with(registerAllocation[instruction]) {
+            instruction.destination?.toX86Register() to instruction.arguments.map { it.toX86Operand() }
+        }
+
+        val name = when (instruction) {
+            is AsmIr.CallPrint -> "putchar"
+            is AsmIr.CallRead -> "getchar"
+            is AsmIr.CallFlush -> "fflush"
+        }
+
+        val arguments = if (instruction is AsmIr.CallFlush) {
+            // add stdout as argument for fflush
+            listOf(X86Immediate(0u))
+        } else {
+            argumentsFromProgram
+        }
+
+        generateCallImpl(name, destination, arguments, registerAllocation.numberOfStackVariables)
+
+        if (destination != null) {
+            // adjust return values according to spec
+            when (instruction) {
+                is AsmIr.CallPrint, is AsmIr.CallFlush -> mov(destination, X86Immediate(0u)) // print and flush always returns 0
+                is AsmIr.CallRead -> {} // read already returns the value or -1 if EOF
+            }
+        }
+    }
+
+    private fun generateCallImpl(name: String, destination: Register<X86Architecture>?, arguments: List<Operand<X86Architecture>>, numberOfStackVariables: Int) = with(builder) {
+        val baseIndex = numberOfStackVariables
         for ((index, register) in X86Architecture.getCallerSavedRegisters().withIndex()) {
             mov(X86StackRegister(baseIndex + index), register)
         }
@@ -215,7 +250,7 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             sub(X86Registers.RSP, X86Immediate(16u - misalignment.toUInt()))
         }
 
-        call(instruction.functionName)
+        call(name)
 
         if (destination != null) {
             mov(destination, X86Registers.EAX)
