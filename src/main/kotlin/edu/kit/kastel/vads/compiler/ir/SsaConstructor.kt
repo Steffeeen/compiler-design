@@ -262,7 +262,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
             }
 
-            else -> error("Unsupported assignment operator: ${assignmentNode.operator}")
+            Token.OperatorType.ASSIGN_BITWISE_AND -> { left, right, sideEffect -> IrNode.BitwiseAndNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_BITWISE_XOR -> { left, right, sideEffect -> IrNode.BitwiseXorNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_BITWISE_OR -> { left, right, sideEffect -> IrNode.BitwiseOrNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_LEFT_SHIFT -> { left, right, sideEffect -> IrNode.LeftShiftNode(left, right) to sideEffect }
+            Token.OperatorType.ASSIGN_RIGHT_SHIFT -> { left, right, sideEffect -> IrNode.RightShiftNode(left, right) to sideEffect }
         }
 
         val (expressionNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(assignmentNode.expression, lastSideEffectNode, lastControlNode)
