@@ -136,6 +136,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.SideEffectPhiNode -> TODO()
             IrNode.StartNode -> {} // handled in the main lower function
             is IrNode.NormalCallNode if controlNode.dataSuccessors().isNotEmpty() -> {
+                controlsToBlock[controlNode] = currentBlock
                 controlNode.controlSuccessors().forEach { generateControlNode(it) }
                 generatedNodes.remove(controlNode)
             }
@@ -429,12 +430,12 @@ private class Lowerer(private val irGraph: IrGraph) {
         return Pair(trueProjection as IrNode.IfProjectionNode, falseProjection as IrNode.IfProjectionNode)
     }
 
-    private fun IrNode.DataNode.dataSuccessors(): Set<IrNode.DataNode> = successorInfo.getDataSuccessors(this)
+    private fun IrNode.DataNode.dataSuccessors(): Set<IrNode.DataNodeConsumingNode> = successorInfo.getDataSuccessors(this)
 }
 
 private class SuccessorInfo(irGraph: IrGraph) {
     private val controlSuccessors = mutableMapOf<IrNode.ControlNode, MutableSet<IrNode.ControlNode>>()
-    private val dataSuccessors = mutableMapOf<IrNode.DataNode, MutableSet<IrNode.DataNode>>()
+    private val dataSuccessors = mutableMapOf<IrNode.DataNode, MutableSet<IrNode.DataNodeConsumingNode>>()
     private val seen = mutableSetOf<IrNode>()
 
     init {
@@ -445,7 +446,7 @@ private class SuccessorInfo(irGraph: IrGraph) {
         return controlSuccessors.getOrDefault(node, emptySet())
     }
 
-    fun getDataSuccessors(node: IrNode.DataNode): Set<IrNode.DataNode> {
+    fun getDataSuccessors(node: IrNode.DataNode): Set<IrNode.DataNodeConsumingNode> {
         return dataSuccessors.getOrDefault(node, emptySet())
     }
 
@@ -476,7 +477,7 @@ private class SuccessorInfo(irGraph: IrGraph) {
             calculateSuccessorInfo(node.control)
         }
 
-        if (node is IrNode.DataNode) {
+        if (node is IrNode.DataNodeConsumingNode) {
             node.dataInputs.forEach {
                 dataSuccessors.getOrPut(it) { mutableSetOf() }.add(node)
                 calculateSuccessorInfo(it)
