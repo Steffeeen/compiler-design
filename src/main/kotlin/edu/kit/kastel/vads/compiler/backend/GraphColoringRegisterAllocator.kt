@@ -44,7 +44,7 @@ private class LiveRange() {
     }
 }
 
-class GraphColoringRegisterAllocator<T : Architecture> : RegisterAllocator<T> {
+class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : RegisterAllocator<T> {
     override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function, stackSlotCreator: (Int) -> StackLocation<T>): RegisterAllocation<T> {
         val predecessors = calculatePredecessors(function)
         val successors = calculateSuccessors(predecessors)
@@ -54,13 +54,15 @@ class GraphColoringRegisterAllocator<T : Architecture> : RegisterAllocator<T> {
 
         return with(predecessors) {
             with(successors) {
-                allocate(availableRegistersSequence, function)
+                with(architecture) {
+                    allocate(availableRegistersSequence, function)
+                }
             }
         }
     }
 }
 
-context(predecessors: Predecessors, successors: Successors)
+context(predecessors: Predecessors, successors: Successors, architecture: T)
 private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>>, function: AsmIr.Function): RegisterAllocation<T> {
     val instructionNumbering = numberInstructions(function.startBlock)
 
@@ -68,6 +70,14 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
 
     val allocations = mutableMapOf<AsmIr.Register, MutableMap<AsmIr.Instruction, AllocationInformation<T>>>()
     val currentAllocations = mutableMapOf<AsmIr.Register, Location<T>>()
+
+    val parameterHardwareRegisters = architecture.getArgumentRegisters()
+    require(function.parameters.size <= parameterHardwareRegisters.size) { TODO("Implement stack arguments in register allocator") }
+    for ((index, parameterRegister) in function.parameters.withIndex()) {
+        @Suppress("UNCHECKED_CAST")
+        currentAllocations[parameterRegister] = parameterHardwareRegisters[index] as Register<T>
+        allocations[parameterRegister] = mutableMapOf()
+    }
 
     for (instruction in instructionNumbering.entries.sortedBy { it.value }.map { it.key }) {
         fun handleOperand(instruction: AsmIr.Instruction, operand: AsmIr.Operand) {

@@ -85,7 +85,7 @@ private fun CompilerOptions.runCompiler() {
     val asmIrString = asmIrToString(asmIr)
     println(asmIrString)
 
-    val registerAllocator = GraphColoringRegisterAllocator<X86Architecture>()
+    val registerAllocator = GraphColoringRegisterAllocator(X86Architecture)
     val registerAllocations =
         asmIr.functions.associateWith { registerAllocator.allocateRegisters(X86Architecture.getAvailableRegisters(), it) { index -> X86StackRegister(index) } }
 
