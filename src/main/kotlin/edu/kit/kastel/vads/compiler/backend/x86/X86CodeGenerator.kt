@@ -30,8 +30,9 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             function.name
         }
 
-        createFunction(name, registerAllocation.numberOfStackVariables) {
-            jmp("mainimpl_start")
+        val numberOfStackVariables = registerAllocation.numberOfStackVariables + X86Architecture.getCallerSavedRegisters().size
+        createFunction(name, numberOfStackVariables) {
+            jmp("${name}_start")
 
             with(name) {
                 for (block in function.blocks) {
@@ -65,7 +66,7 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
                 }
             }
 
-            is AsmIr.Call -> TODO()
+            is AsmIr.Call -> generateCall(instruction)
             is AsmIr.CallFlush -> TODO()
             is AsmIr.CallPrint -> TODO()
             is AsmIr.CallRead -> TODO()
@@ -183,6 +184,46 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
         }
 
         mov(destination, source)
+    }
+
+    context(registerAllocation: RegisterAllocation<X86Architecture>)
+    private fun generateCall(instruction: AsmIr.Call) = with(builder) {
+        val (destination, arguments) = with(registerAllocation[instruction]) {
+            instruction.destination?.toX86Register() to instruction.arguments.map { it.toX86Operand() }
+        }
+
+        val baseIndex = registerAllocation.numberOfStackVariables
+        for ((index, register) in X86Architecture.getCallerSavedRegisters().withIndex()) {
+            mov(X86StackRegister(baseIndex + index), register)
+        }
+
+        val numberOfArgumentRegisters = X86Architecture.getArgumentRegisters().size
+        val argumentsInRegisters = arguments.take(numberOfArgumentRegisters)
+        val argumentsOnStack = arguments.drop(numberOfArgumentRegisters)
+
+        for ((index, argument) in argumentsInRegisters.withIndex()) {
+            mov(X86Architecture.getArgumentRegisters()[index], argument)
+        }
+
+        for (argument in argumentsOnStack.reversed()) {
+            push(argument)
+        }
+
+        // align the stack to 16 bytes if necessary (only 32-bit values)
+        val misalignment = (argumentsOnStack.size * 4) % 16
+        if (misalignment != 0) {
+            sub(X86Registers.RSP, X86Immediate(16u - misalignment.toUInt()))
+        }
+
+        call(instruction.functionName)
+
+        if (destination != null) {
+            mov(destination, X86Registers.EAX)
+        }
+
+        for ((index, register) in X86Architecture.getCallerSavedRegisters().withIndex()) {
+            mov(register, X86StackRegister(baseIndex + index))
+        }
     }
 
     context(registerToInformation: Map<AsmIr.Register, AllocationInformation<X86Architecture>>)

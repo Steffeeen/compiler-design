@@ -63,11 +63,14 @@ class X86AssemblyBuilder {
     fun leave() = generateInstruction("leave")
     fun ret() = generateInstruction("ret")
     fun call(name: String) = builder.appendLine("${INDENT}call $name")
+    fun push(source: Source) = generateInstruction("push", source)
 
     fun createFunction(name: String, numberOfStackVariables: Int, block: X86AssemblyBuilder.() -> Unit) {
         global(name, SymbolType.FUNCTION)
         enter((numberOfStackVariables * 4).toImmediate())
         block()
+        builder.appendLine("; End of function $name")
+        builder.appendLine()
     }
 
     fun label(name: String) {
@@ -92,7 +95,7 @@ class X86AssemblyBuilder {
 }
 
 private fun Operand<X86Architecture>.string(): String = when (this) {
-    is StackLocation<X86Architecture> -> "DWORD PTR [${X86Registers.RSP} + ${(this as X86StackRegister).index * 4}]"
+    is StackLocation<X86Architecture> -> "DWORD PTR [${X86Registers.RBP} - ${(this as X86StackRegister).index * 4}]"
     is Register<X86Architecture> -> name.lowercase()
     is Immediate<X86Architecture> -> value.toString()
     is Label<X86Architecture> -> ".$name"
