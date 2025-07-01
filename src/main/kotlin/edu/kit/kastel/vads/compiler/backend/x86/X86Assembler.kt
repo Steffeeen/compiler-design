@@ -33,7 +33,7 @@ class X86Assembler : Assembler<X86Architecture> {
             .replace(Regex("^main:", RegexOption.MULTILINE), "_main:")
             .replace(Regex("^\\.global main$", RegexOption.MULTILINE), "global _main")
             .replace(Regex("^\\.global ", RegexOption.MULTILINE), "global ")
-            .replace(Regex("^\\.extern ", RegexOption.MULTILINE), "extern ")
+            .replace(Regex("^\\.extern (\\w+)", RegexOption.MULTILINE), "extern _$1")
             .replace(Regex("^\\.text", RegexOption.MULTILINE), "section .text")
             .replace("#", ";")
             .replace(Regex(".type (.*) @function", RegexOption.MULTILINE), "")
