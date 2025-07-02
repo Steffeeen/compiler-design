@@ -136,7 +136,7 @@ sealed interface IrNode {
         override val dataInputs: List<DataNode> get() = listOfNotNull(first, second)
     }
 
-    class SideEffectPhiNode(val first: SideEffectNode, val second: SideEffectNode, override val control: RegionNode) : SideEffectRelevantNode, ControlRelevantNode {
+    class SideEffectPhiNode(val first: SideEffectNode, val second: SideEffectNode, val firstControl: ControlNode?, val secondControl: ControlNode?) : SideEffectRelevantNode {
         override val sideEffect: SideEffectNode = first // or second, depending on the context
     }
 }

@@ -82,7 +82,6 @@ private class Lowerer(private val irGraph: IrGraph) {
                 is IrNode.RegionNode -> visitNode(node.controlSuccessor())
                 is IrNode.IfProjectionNode -> visitNode(node.controlSuccessors().first())
                 is IrNode.ReturnNode -> {}
-                is IrNode.SideEffectPhiNode -> TODO()
                 IrNode.StartNode -> node.controlSuccessors().forEach { visitNode(it) }
 
                 is IrNode.NormalCallNode -> {
@@ -133,7 +132,6 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.LoopRegionNode -> generateLoopRegionNode(controlNode)
             is IrNode.RegionNode -> generateRegionNode(controlNode)
             is IrNode.ReturnNode -> generateReturnNode(controlNode)
-            is IrNode.SideEffectPhiNode -> TODO()
             IrNode.StartNode -> {} // handled in the main lower function
             is IrNode.NormalCallNode if controlNode.dataSuccessors().isNotEmpty() -> {
                 controlsToBlock[controlNode] = currentBlock
@@ -386,7 +384,6 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.IfProjectionNode -> error("Exhaustiveness check in kotlin not good enough, this should not happen")
             is IrNode.LoopRegionNode -> "loop_region_${controlNode.hashCode()}"
             is IrNode.RegionNode -> "region_${controlNode.hashCode()}"
-            is IrNode.SideEffectPhiNode -> "side_effect_phi_${controlNode.hashCode()}"
             is IrNode.BuiltinCallNode -> error("BuiltinCallNode does not have a label")
             is IrNode.NormalCallNode -> error("NormalCallNode does not have a label")
         }.replace("-", "_")
