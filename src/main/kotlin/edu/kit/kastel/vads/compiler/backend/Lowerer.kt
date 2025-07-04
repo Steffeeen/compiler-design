@@ -219,8 +219,10 @@ private class Lowerer(private val irGraph: IrGraph) {
             generateControlNode(loopRegionNode.controlSuccessor())
         }
 
-        val backEdgeBlock = controlsToBlock[loopRegionNode.backEdge!!]!!
-        backEdgeBlock.setFinalJump(loopBlock)
+        if (loopRegionNode.backEdge != null) {
+            val backEdgeBlock = controlsToBlock[loopRegionNode.backEdge!!]!!
+            backEdgeBlock.setFinalJump(loopBlock)
+        }
     }
 
     context(currentBlock: BasicBlockBuilder)
@@ -463,9 +465,9 @@ private class SuccessorInfo(irGraph: IrGraph) {
 
         if (node is IrNode.RegionNode) {
             controlSuccessors.getOrPut(node.first) { mutableSetOf() }.add(node)
-            controlSuccessors.getOrPut(node.second!!) { mutableSetOf() }.add(node)
             calculateSuccessorInfo(node.first)
-            calculateSuccessorInfo(node.second!!)
+            node.second?.let { controlSuccessors.getOrPut(it) { mutableSetOf() }.add(node) }
+            node.second?.let { calculateSuccessorInfo(it) }
             return
         }
 

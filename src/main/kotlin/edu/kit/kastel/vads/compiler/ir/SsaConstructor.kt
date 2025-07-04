@@ -515,6 +515,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                     continue
                 }
 
+                if (value is IrNode.PhiNode && value.second == null) {
+                    // This is an incomplete phi node which means that it belongs to an outer loop, so we just ignore it
+                    continue
+                }
+
                 val (currentValue, currentControlNode) = result[variableName]!!
                 val phiNode = IrNode.PhiNode(variableName, currentValue, currentControlNode, value, edgeControlNode, currentRegionNode)
                 result[variableName] = phiNode to edgeControlNode
@@ -567,13 +572,19 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
         val result = createIrNodeForStatement(body, newSideEffectNode, trueProjectionNode)
 
-        currentLoopInformation.addBackEdge(result.controlNode!!, symbolTable)
+        if (!result.controlFlowEnded) {
+            currentLoopInformation.addBackEdge(result.controlNode!!, symbolTable)
+        }
 
         return result
     }
 
     context(symbolTable: SymbolTable)
     private fun updatePhisAtLoopEnd(incompletePhis: List<IrNode.PhiNode>, loopInformation: LoopInformation) {
+        if (incompletePhis.isEmpty()) {
+            return
+        }
+
         val (variableInfo, controlNode) = mergeDefinitions(loopInformation.backEdges)
 
         loopInformation.loopRegion.backEdge = controlNode

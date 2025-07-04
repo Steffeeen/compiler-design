@@ -94,7 +94,7 @@ private fun GraphBuilder.printNode(node: IrNode): Int {
 
     if (node is IrNode.RegionNode) {
         addEdge(printNode(node.first), nodeId, EdgeType.CONTROL)
-        addEdge(printNode(node.second!!), nodeId, EdgeType.CONTROL)
+        node.second?.let { addEdge(printNode(it), nodeId, EdgeType.CONTROL) }
         return nodeId
     }
 
