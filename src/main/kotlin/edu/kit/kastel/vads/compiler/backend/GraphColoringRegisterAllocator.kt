@@ -214,55 +214,53 @@ private fun calculateLiveness(returnBlock: AsmIr.BasicBlock): Map<AsmIr.Instruct
         outLive[block] = block.successors().flatMap { inLive[it] ?: emptySet() }.toSet()
         val liveInCurrentBlock = outLive[block]!!.toMutableSet()
 
-        fun recordDefinition(register: AsmIr.Register, killed: MutableSet<AsmIr.Register>) {
-            killed.add(register)
-        }
-
-        fun recordUse(operand: AsmIr.Operand) {
-            if (operand is AsmIr.Register) {
-                liveInCurrentBlock.add(operand)
-            }
-        }
-
         for (instruction in block.instructions.reversed()) {
-            val killed = mutableSetOf<AsmIr.Register>()
+            val kill = mutableSetOf<AsmIr.Register>()
+            val gen = mutableSetOf<AsmIr.Register>()
+            val killAfterInstruction = mutableSetOf<AsmIr.Register>()
+
+            fun recordUse(operand: AsmIr.Operand) {
+                if (operand is AsmIr.Register) {
+                    gen.add(operand)
+                }
+            }
+
             when (instruction) {
                 is AsmIr.BinaryOperation -> {
                     recordUse(instruction.leftSource)
                     recordUse(instruction.rightSource)
 
-                    if (instruction.operation.isCommutative) {
+                    if (instruction.operation.isCommutative && instruction.destination != instruction.leftSource && instruction.destination != instruction.rightSource) {
                         // If the operation is commutative, we can have the destination and the sources not interfere as we can swap operands and can thus avoid the situation
                         // where the destination and the right source are the same. If the destination is the same as the right source and the operation is not commutative,
                         // we would overwrite the right source by moving the left source into the destination. We have to do that move to transform the three-address AsmIr
-                        // into two-address assembly like X86.
-                        liveInCurrentBlock.remove(instruction.destination)
+                        // into two-address assembly like X86. We thus remove the destination from the live variables immediately.
+                        kill.add(instruction.destination)
                     } else {
-                        // If the operation is not commutative, the destination and all the sources have to interfere to avoid the situation described above where the destination
-                        // is the same as the right source.
-                        killed.add(instruction.destination)
+                        // The destination has to interfere with both sources. We thus remove the destination from the live variables only after writing the interfering registers
+                        // for this instruction.
+                        killAfterInstruction.add(instruction.destination)
                     }
-                    recordDefinition(instruction.destination, killed)
                 }
 
                 is AsmIr.UnaryOperation -> {
                     recordUse(instruction.source)
-                    recordDefinition(instruction.destination, killed)
+                    kill.add(instruction.destination)
                 }
 
                 is AsmIr.Move -> {
                     recordUse(instruction.source)
-                    recordDefinition(instruction.destination, killed)
+                    kill.add(instruction.destination)
                 }
 
                 is AsmIr.Call -> {
                     instruction.arguments.forEach { recordUse(it) }
-                    instruction.destination?.let { recordDefinition(it, killed) }
+                    instruction.destination?.let { kill.add(it) }
                 }
 
                 is AsmIr.CallBuiltin -> {
                     instruction.arguments.forEach { recordUse(it) }
-                    instruction.destination?.let { recordDefinition(it, killed) }
+                    instruction.destination?.let { kill.add(it) }
                 }
 
                 is AsmIr.Return -> recordUse(instruction.value)
@@ -270,8 +268,9 @@ private fun calculateLiveness(returnBlock: AsmIr.BasicBlock): Map<AsmIr.Instruct
                 is AsmIr.Jump -> {}
             }
 
+            liveInCurrentBlock.removeAll(kill)
+            liveInCurrentBlock.addAll(gen)
             liveVariables[instruction] = liveInCurrentBlock.toSet()
-            liveInCurrentBlock.removeAll(killed)
         }
 
         inLive[block] = liveInCurrentBlock
