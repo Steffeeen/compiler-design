@@ -70,7 +70,8 @@ class X86AssemblyBuilder {
 
     fun createFunction(name: String, numberOfStackVariables: Int, block: X86AssemblyBuilder.() -> Unit) {
         global(name, SymbolType.FUNCTION)
-        enter((numberOfStackVariables * 4).toImmediate())
+        val stackSize = numberOfStackVariables * 4 + X86Architecture.getCallerSavedRegisters().size * 4
+        enter(stackSize.toImmediate())
         block()
         builder.appendLine("# End of function $name")
         builder.appendLine()
