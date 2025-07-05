@@ -229,7 +229,7 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
     private fun generateCallImpl(name: String, destination: Register<X86Architecture>?, arguments: List<Operand<X86Architecture>>, numberOfStackVariables: Int) = with(builder) {
         val baseIndex = numberOfStackVariables
         for ((index, register) in X86Architecture.getCallerSavedRegisters().withIndex()) {
-            mov(X86StackRegister(baseIndex + index), register)
+            mov(X86SpillLocation(baseIndex + index), register)
         }
 
         val numberOfArgumentRegisters = X86Architecture.getArgumentRegisters().size
@@ -244,20 +244,26 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             push(argument)
         }
 
-        // align the stack to 16 bytes if necessary (only 32-bit values)
-        val misalignment = (argumentsOnStack.size * 4) % 16
-        if (misalignment != 0) {
-            sub(X86Registers.RSP, X86Immediate(16u - misalignment.toUInt()))
+        // Align the stack to 16 bytes if necessary (only 32-bit values)
+        val stackBytesUsed = argumentsOnStack.size * 4
+        val totalStackUsage = stackBytesUsed + 8 // 8 bytes for the return address
+        val misalignment = totalStackUsage % 16
+        val neededPadding = if (misalignment == 0) 0 else 16 - misalignment
+        if (neededPadding > 0) {
+            sub(X8664BitRegisters.RSP, X86Immediate(neededPadding.toUInt()))
         }
 
         call(name)
+
+        // Restore the stack pointer after the call
+        add(X8664BitRegisters.RSP, X86Immediate(totalStackUsage.toUInt() + neededPadding.toUInt()))
 
         if (destination != null) {
             mov(destination, X86Registers.EAX)
         }
 
         for ((index, register) in X86Architecture.getCallerSavedRegisters().withIndex()) {
-            mov(register, X86StackRegister(baseIndex + index))
+            mov(register, X86SpillLocation(baseIndex + index))
         }
     }
 

@@ -9,9 +9,9 @@ interface RegisterAllocation<T : Architecture> {
 
 sealed interface AllocationInformation<T : Architecture> {
     data class NormalRegister<T : Architecture>(val register: Register<T>) : AllocationInformation<T>
-    data class Spill<T : Architecture>(val register: Register<T>, val spillLocation: StackLocation<T>) : AllocationInformation<T>
+    data class Spill<T : Architecture>(val register: Register<T>, val spillLocation: SpillLocation<T>) : AllocationInformation<T>
     data class Reload<T : Architecture>(val register: Register<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
-    data class SpillAndReload<T : Architecture>(val register: Register<T>, val spillLocation: StackLocation<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
+    data class SpillAndReload<T : Architecture>(val register: Register<T>, val spillLocation: SpillLocation<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
 }
 
 sealed interface RegisterConstraint<T : Architecture> {
@@ -26,6 +26,7 @@ interface RegisterAllocator<T : Architecture> {
     fun allocateRegisters(
         availableRegisters: Set<Register<T>>,
         function: AsmIr.Function,
-        stackSlotCreator: (Int) -> StackLocation<T>,
+        stackSlotCreator: (Int) -> SpillLocation<T>,
+        argumentLocationCreator: (Int) -> ArgumentLocation<T>,
     ): RegisterAllocation<T>
 }

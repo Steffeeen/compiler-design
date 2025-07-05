@@ -45,7 +45,12 @@ private class LiveRange() {
 }
 
 class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : RegisterAllocator<T> {
-    override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function, stackSlotCreator: (Int) -> StackLocation<T>): RegisterAllocation<T> {
+    override fun allocateRegisters(
+        availableRegisters: Set<Register<T>>,
+        function: AsmIr.Function,
+        stackSlotCreator: (Int) -> SpillLocation<T>,
+        argumentLocationCreator: (Int) -> ArgumentLocation<T>
+    ): RegisterAllocation<T> {
         val predecessors = calculatePredecessors(function)
         val successors = calculateSuccessors(predecessors)
 
@@ -55,7 +60,7 @@ class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : Re
         return with(predecessors) {
             with(successors) {
                 with(architecture) {
-                    allocate(availableRegistersSequence, function)
+                    allocate(availableRegistersSequence, function, argumentLocationCreator)
                 }
             }
         }
@@ -63,7 +68,11 @@ class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : Re
 }
 
 context(predecessors: Predecessors, successors: Successors, architecture: T)
-private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>>, function: AsmIr.Function): RegisterAllocation<T> {
+private fun <T : Architecture> allocate(
+    availableRegisters: Sequence<Location<T>>,
+    function: AsmIr.Function,
+    argumentLocationCreator: (Int) -> ArgumentLocation<T>
+): RegisterAllocation<T> {
     val instructionNumbering = numberInstructions(function.startBlock)
 
     val interferenceGraph = buildInterferenceGraph(instructionNumbering, function.returnBlock)
@@ -71,11 +80,10 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
     val allocations = mutableMapOf<AsmIr.Register, MutableMap<AsmIr.Instruction, AllocationInformation<T>>>()
     val currentAllocations = mutableMapOf<AsmIr.Register, Location<T>>()
 
-    val parameterHardwareRegisters = architecture.getArgumentRegisters()
-    require(function.parameters.size <= parameterHardwareRegisters.size) { TODO("Implement stack arguments in register allocator") }
+    @Suppress("UNCHECKED_CAST")
+    val parameterLocations = (architecture.getArgumentRegisters().asSequence() + generateSequence(0) { it + 1 }.map { argumentLocationCreator(it) }) as Sequence<Location<T>>
     for ((index, parameterRegister) in function.parameters.withIndex()) {
-        @Suppress("UNCHECKED_CAST")
-        currentAllocations[parameterRegister] = parameterHardwareRegisters[index] as Register<T>
+        currentAllocations[parameterRegister] = parameterLocations.elementAt(index)
         allocations[parameterRegister] = mutableMapOf()
     }
 
@@ -112,7 +120,7 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
             }
 
             // No register available, we need to spill
-            require(locationToUse is StackLocation<T>) // should be a stack location
+            require(locationToUse is SpillLocation<T>) // should be a stack location
 
             // FIXME: Implement a proper heuristic to choose which register to spill
             // for now, choose a register to spill randomly
@@ -120,7 +128,7 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
 
             val allocationInformation = if (operand in currentAllocations) {
                 val reloadLocation = currentAllocations[operand]!!
-                require(reloadLocation is StackLocation<T>) { "should be a stack location" }
+                require(reloadLocation is SpillLocation<T>) { "should be a stack location" }
                 AllocationInformation.SpillAndReload(registerToSpill as Register<T>, locationToUse, reloadLocation)
             } else {
                 AllocationInformation.Spill(registerToSpill as Register<T>, locationToUse)

@@ -10,7 +10,13 @@ interface Register<T : Architecture> : Location<T> {
     val name: String
 }
 
-interface StackLocation<T : Architecture> : Location<T> {
+interface StackLocation<T : Architecture> : Location<T>
+
+interface SpillLocation<T : Architecture> : StackLocation<T> {
+    val index: Int
+}
+
+interface ArgumentLocation<T : Architecture> : StackLocation<T> {
     val index: Int
 }
 

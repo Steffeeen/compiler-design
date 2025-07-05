@@ -2,6 +2,7 @@ package edu.kit.kastel.vads.compiler.backend
 
 import edu.kit.kastel.vads.compiler.backend.x86.X86Assembler
 import edu.kit.kastel.vads.compiler.backend.x86.X86CodeGenerator
+import edu.kit.kastel.vads.compiler.backend.x86.X86Register
 import edu.kit.kastel.vads.compiler.backend.x86.X86Registers
 import edu.kit.kastel.vads.compiler.backend.x86.X86Registers.*
 
@@ -17,9 +18,9 @@ interface Architecture {
 }
 
 object X86Architecture : Architecture {
-    val TEMP_REGISTER = X86Registers.R15D
+    val TEMP_REGISTER = R15D
 
-    private val RESERVED_REGISTERS = setOf(EAX, EDX, RSP, RBP, TEMP_REGISTER)
+    private val RESERVED_REGISTERS: Set<X86Register> = setOf(EAX, EDX, ESP, EBP, TEMP_REGISTER)
 
     override val name: String = "x86"
     override fun createCodeGenerator(): CodeGenerator<out X86Architecture> = X86CodeGenerator()
