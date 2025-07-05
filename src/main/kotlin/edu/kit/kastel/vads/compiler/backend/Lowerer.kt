@@ -41,11 +41,18 @@ private class Lowerer(private val irGraph: IrGraph) {
             val block = block(label(returnNode))
 
             with(block) {
-                nodesToRegisters[returnNode.result] = returnRegister
-                if (returnNode.result is IrNode.ConstantNode<*>) {
-                    addLast(AsmIr.Move(returnRegister, source(returnNode.result)))
-                } else {
-                    generateDataNode(returnNode.result, returnRegister)
+                when (returnNode.result) {
+                    is IrNode.ParameterNode -> addLast(AsmIr.Move(returnRegister, source(returnNode.result)))
+
+                    is IrNode.ConstantNode<*> -> {
+                        nodesToRegisters[returnNode.result] = returnRegister
+                        addLast(AsmIr.Move(returnRegister, source(returnNode.result)))
+                    }
+
+                    else -> {
+                        nodesToRegisters[returnNode.result] = returnRegister
+                        generateDataNode(returnNode.result, returnRegister)
+                    }
                 }
             }
 
@@ -252,9 +259,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.NormalCallNode -> generateNormalCallNode(node, destination)
             is IrNode.ParameterNode -> {
                 val source = source(node)
-                if (source != parameterRegisters[node]) {
-                    currentBlock.addFirst(AsmIr.Move(destination, source))
-                }
+                currentBlock.addFirst(AsmIr.Move(destination, source))
             }
         }
     }
