@@ -10,6 +10,9 @@ import edu.kit.kastel.vads.compiler.parser.TokenSource
 import edu.kit.kastel.vads.compiler.parser.parse
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.test.fail
@@ -36,14 +39,24 @@ class LowererTest {
                         require(result is ParseResult.Success)
                         val ir = buildIr(result.program)
                         val asmIr = lowerIrToAsmIr(ir)
-                        val evaluationResult = asmIr.evaluate(testCase.programInput)
-                        when (evaluationResult) {
-                            is EvaluationResult.DivByZero -> assertTrue(testCase.shouldCrash == CrashType.FLOATING_POINT)
-                            is EvaluationResult.Success -> {
-                                if (testCase.exitCode != null) {
-                                    assertEquals(testCase.exitCode, evaluationResult.value)
+                        val executor = Executors.newSingleThreadExecutor()
+                        try {
+                            val future = executor.submit<EvaluationResult> {
+                                asmIr.evaluate(testCase.programInput)
+                            }
+                            val evaluationResult = future.get(10, TimeUnit.SECONDS)
+                            when (evaluationResult) {
+                                is EvaluationResult.DivByZero -> assertTrue(testCase.shouldCrash == CrashType.FLOATING_POINT)
+                                is EvaluationResult.Success -> {
+                                    if (testCase.exitCode != null) {
+                                        assertEquals(testCase.exitCode, evaluationResult.value)
+                                    }
                                 }
                             }
+                        } catch (e: TimeoutException) {
+                            fail("Evaluation did not complete within 10 seconds")
+                        } finally {
+                            executor.shutdownNow()
                         }
                     }
                 }
