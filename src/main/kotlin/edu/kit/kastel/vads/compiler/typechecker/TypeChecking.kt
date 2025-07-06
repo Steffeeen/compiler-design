@@ -89,8 +89,9 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         val expressionType = typeCheck(unaryOperationNode.expression)
 
         val expectedType = when (unaryOperationNode.operator) {
-            Token.OperatorType.SUB, Token.OperatorType.BITWISE_NOT -> Type.IntType
+            Token.OperatorType.SUB_OR_NEGATE, Token.OperatorType.BITWISE_NOT -> Type.IntType
             Token.OperatorType.LOGICAL_NOT -> Type.BoolType
+            Token.OperatorType.DEREFERENCE_OR_MUL -> TODO()
         }
 
         compareTypes(expectedType, expressionType, unaryOperationNode.expression)
@@ -227,8 +228,8 @@ private val BOOL_TO_BOOL = BinaryOperationType(Type.BoolType, Type.BoolType, Typ
 
 private fun Token.OperatorType.BinaryOperatorType.expectedType(): BinaryOperationType = when (this) {
     Token.OperatorType.ADD,
-    Token.OperatorType.SUB,
-    Token.OperatorType.MUL,
+    Token.OperatorType.SUB_OR_NEGATE,
+    Token.OperatorType.DEREFERENCE_OR_MUL,
     Token.OperatorType.DIV,
     Token.OperatorType.MOD,
     Token.OperatorType.BITWISE_AND,
@@ -260,4 +261,6 @@ private fun Token.OperatorType.BinaryOperatorType.expectedType(): BinaryOperatio
 
     Token.OperatorType.EQUAL, Token.OperatorType.NOT_EQUAL -> error("The comparison operators' expected type is always to be the same on both sides")
     Token.OperatorType.ASSIGN -> error("The assignment operator's expected type is always to just be the same on both sides")
+    Token.OperatorType.FIELD_ACCESS -> TODO()
+    Token.OperatorType.FIELD_DEREFERENCE -> TODO()
 }
