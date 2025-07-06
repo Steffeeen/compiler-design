@@ -297,13 +297,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
     context(symbolTable: SymbolTable)
     private fun handleBlockNode(blockNode: AstNode.BlockNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): StatementReturn {
-        return createNamespace {
-            val statements = getStatementsUntilFirstControlFlowEndingStatement(blockNode.statements)
+        val statements = getStatementsUntilFirstControlFlowEndingStatement(blockNode.statements)
 
-            val initial = StatementReturn(lastSideEffectNode, lastControlNode)
-            statements.fold(initial) { (sideEffectNode, controlNode, _), statement ->
-                createIrNodeForStatement(statement, sideEffectNode, controlNode!!)
-            }
+        val initial = StatementReturn(lastSideEffectNode, lastControlNode)
+        return statements.fold(initial) { (sideEffectNode, controlNode, _), statement ->
+            createIrNodeForStatement(statement, sideEffectNode, controlNode!!)
         }
     }
 

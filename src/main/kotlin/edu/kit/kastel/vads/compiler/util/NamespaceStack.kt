@@ -38,15 +38,11 @@ class NamespaceStack<T> {
     }
 
     fun merge(other: NamespaceStack<T>): Map<SymbolName, Pair<T, T>> {
-        val allKeysInThisScope = getAll().keys
-        val allKeysInOtherScope = other.getAll().keys
-        require(allKeysInThisScope == allKeysInOtherScope) { "Cannot merge namespaces with different keys" }
-
         val differing = mutableMapOf<SymbolName, Pair<T, T>>()
 
-        val names = allKeysInThisScope
+        val namesToMerge = getAll().keys.intersect(other.getAll().keys)
 
-        for (name in names) {
+        for (name in namesToMerge) {
             val thisValue = this[name]!!
             val otherValue = other[name]!!
 
