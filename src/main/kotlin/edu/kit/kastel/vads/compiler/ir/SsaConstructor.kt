@@ -517,6 +517,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                     continue
                 }
 
+                if (variableName !in result) {
+                    // This variable was not changed
+                    continue
+                }
+
                 val (currentValue, currentControlNode) = result[variableName]!!
                 val phiNode = IrNode.PhiNode(variableName, currentValue, currentControlNode, value, edgeControlNode, currentRegionNode)
                 result[variableName] = phiNode to edgeControlNode
