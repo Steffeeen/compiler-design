@@ -358,7 +358,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
 
         return when {
             bodyControlFlowEnded && elseControlFlowEnded -> {
-                StatementReturn(mergeSideEffectsIfNeeded(null, null), null, controlFlowEnded = true)
+                StatementReturn(mergeSideEffectsIfNeeded(bodyControlNode, elseControlNode), null, controlFlowEnded = true)
             }
 
             bodyControlFlowEnded -> {
@@ -368,7 +368,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                     writeVariable(name, values.second)
                 }
 
-                StatementReturn(mergeSideEffectsIfNeeded(null, elseControlNode), elseControlNode)
+                StatementReturn(mergeSideEffectsIfNeeded(bodyControlNode, elseControlNode), elseControlNode)
             }
 
             elseControlFlowEnded -> {
@@ -378,7 +378,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                     writeVariable(name, values.second)
                 }
 
-                StatementReturn(mergeSideEffectsIfNeeded(bodyControlNode, null), bodyControlNode)
+                StatementReturn(mergeSideEffectsIfNeeded(bodyControlNode, elseControlNode), bodyControlNode)
             }
 
             else -> {
