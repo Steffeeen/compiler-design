@@ -118,8 +118,7 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             } else {
                 IrNode.ModNode(leftIrNode, rightIrNode, newSideEffectNode2)
             }
-            val sideEffectNode = IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, irNode)
-            return Triple(irNode, sideEffectNode, newControlNode2)
+            return Triple(irNode, irNode, newControlNode2)
         }
 
         val irNode = when (binaryOperationAstNode.operatorType) {
@@ -259,12 +258,12 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             Token.OperatorType.ASSIGN_MUL -> { left, right, sideEffect -> IrNode.MulNode(left, right) to sideEffect }
             Token.OperatorType.ASSIGN_DIV -> { left, right, sideEffectNode ->
                 val divNode = IrNode.DivNode(left, right, sideEffectNode)
-                divNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, divNode)
+                divNode to divNode
             }
 
             Token.OperatorType.ASSIGN_MOD -> { left, right, sideEffectNode ->
                 val modNode = IrNode.ModNode(left, right, sideEffectNode)
-                modNode to IrNode.SideEffectProjectionNode(SideEffectType.DIVISION_BY_ZERO_EXCEPTION, modNode)
+                modNode to modNode
             }
 
             Token.OperatorType.ASSIGN_BITWISE_AND -> { left, right, sideEffect -> IrNode.BitwiseAndNode(left, right) to sideEffect }

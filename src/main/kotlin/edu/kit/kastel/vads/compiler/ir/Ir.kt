@@ -26,6 +26,10 @@ sealed interface IrNode {
         val sideEffect: SideEffectNode
     }
 
+    sealed interface SideEffectEmittingNode : SideEffectRelevantNode {
+        val sideEffectType: SideEffectType
+    }
+
     sealed interface ControlNode : IrNode
 
     sealed interface ControlRelevantNode : ControlNode {
@@ -35,8 +39,6 @@ sealed interface IrNode {
     object StartNode : SideEffectNode, ControlNode
 
     data class EndNode(val returnNodes: List<ReturnNode>) : IrNode
-
-    class SideEffectProjectionNode(val type: SideEffectType, override val sideEffect: SideEffectNode) : SideEffectRelevantNode
 
     data class ParameterNode(val name: SymbolName) : DataNode {
         override val dataInputs: List<DataNode> = listOf()
@@ -73,8 +75,14 @@ sealed interface IrNode {
     class AddNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class SubNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class MulNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
-    class DivNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectRelevantNode
-    class ModNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectRelevantNode
+    class DivNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode {
+        override val sideEffectType: SideEffectType = SideEffectType.DIVISION_BY_ZERO_EXCEPTION
+    }
+
+    class ModNode(override val left: DataNode, override val right: DataNode, override val sideEffect: SideEffectNode) : BinaryOperationNode, SideEffectEmittingNode {
+        override val sideEffectType: SideEffectType = SideEffectType.DIVISION_BY_ZERO_EXCEPTION
+    }
+
     class LeftShiftNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class RightShiftNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
     class LessThanNode(override val left: DataNode, override val right: DataNode) : BinaryOperationNode
