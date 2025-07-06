@@ -81,6 +81,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 val (_, sideEffectNode, controlNode) = createNormalCallNode(astNode, lastSideEffectNode, lastControlNode)
                 StatementReturn(sideEffectNode, controlNode)
             }
+
+            is AstNode.CallAllocArrayNode -> TODO()
+            is AstNode.CallAllocNode -> TODO()
         }
     }
 
@@ -94,6 +97,13 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
             is AstNode.TernaryOperationNode -> handleTernaryOperationNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.CallBuiltinNode -> createBuiltInCallNode(astNode, lastSideEffectNode, lastControlNode)
             is AstNode.CallNormalNode -> createNormalCallNode(astNode, lastSideEffectNode, lastControlNode)
+            is AstNode.FieldAccessNode -> TODO()
+            is AstNode.FieldDereferenceNode -> TODO()
+            is AstNode.NullLiteralNode -> TODO()
+            is AstNode.PointerDereferenceNode -> TODO()
+            is AstNode.CallAllocArrayNode -> TODO()
+            is AstNode.CallAllocNode -> TODO()
+            is AstNode.ArrayAccessNode -> TODO()
         }
     }
 
@@ -283,6 +293,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
                 writeVariable(lValue.name.name, newValue)
                 return StatementReturn(newSideEffectNode2, newControlNode)
             }
+
+            is AstNode.LValueArrayAccessNode -> TODO()
+            is AstNode.LValueFieldAccessNode -> TODO()
+            is AstNode.LValueFieldDereferenceNode -> TODO()
+            is AstNode.LValuePointerDereferenceNode -> TODO()
         }
     }
 
@@ -632,9 +647,11 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val (arguments, newSideEffectNode, newControlNode) = createFunctionCallArguments(astNode.arguments, lastSideEffectNode, lastControlNode)
 
         val node = when (astNode.keyword) {
-            Token.KeywordType.PRINT -> IrNode.PrintNode(arguments.first(), newSideEffectNode, newControlNode)
-            Token.KeywordType.READ -> IrNode.ReadNode(newSideEffectNode, newControlNode)
-            Token.KeywordType.FLUSH -> IrNode.FlushNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.PRINT -> PrintNode(arguments.first(), newSideEffectNode, newControlNode)
+            Token.KeywordType.READ -> ReadNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.FLUSH -> FlushNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.ALLOC -> TODO()
+            Token.KeywordType.ALLOC_ARRAY -> TODO()
         }
         return Triple(node, node, node)
     }

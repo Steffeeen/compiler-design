@@ -49,4 +49,30 @@ abstract class VisitorWithoutData : Visitor<Unit, Unit> {
     open fun visit(callBuiltinNode: CallBuiltinNode) {}
     final override fun visit(parameterNode: ParameterNode, data: Unit) = visit(parameterNode)
     open fun visit(parameterNode: ParameterNode) {}
+    final override fun visit(nullLiteralNode: NullLiteralNode, data: Unit) = visit(nullLiteralNode)
+    open fun visit(nullLiteralNode: NullLiteralNode) {}
+    final override fun visit(pointerDereferenceNode: PointerDereferenceNode, data: Unit) = visit(pointerDereferenceNode)
+    open fun visit(pointerDereferenceNode: PointerDereferenceNode) {}
+    final override fun visit(fieldAccessNode: FieldAccessNode, data: Unit) = visit(fieldAccessNode)
+    open fun visit(fieldAccessNode: FieldAccessNode) {}
+    final override fun visit(fieldDereferenceNode: FieldDereferenceNode, data: Unit) = visit(fieldDereferenceNode)
+    open fun visit(fieldDereferenceNode: FieldDereferenceNode) {}
+    final override fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, data: Unit) = visit(lValuePointerDereferenceNode)
+    open fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode) {}
+    final override fun visit(lValueFieldAccessNode: LValueFieldAccessNode, data: Unit) = visit(lValueFieldAccessNode)
+    open fun visit(lValueFieldAccessNode: LValueFieldAccessNode) {}
+    final override fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, data: Unit) = visit(lValueFieldDereferenceNode)
+    open fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode) {}
+    final override fun visit(lValueArrayAccessNode: LValueArrayAccessNode, data: Unit) = visit(lValueArrayAccessNode)
+    open fun visit(lValueArrayAccessNode: LValueArrayAccessNode) {}
+    final override fun visit(structDeclarationNode: StructDeclarationNode, data: Unit) = visit(structDeclarationNode)
+    open fun visit(structDeclarationNode: StructDeclarationNode) {}
+    final override fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, data: Unit) = visit(structFieldDeclarationNode)
+    open fun visit(structFieldDeclarationNode: StructFieldDeclarationNode) {}
+    final override fun visit(callAllocNode: CallAllocNode, data: Unit) = visit(callAllocNode)
+    open fun visit(callAllocNode: CallAllocNode) {}
+    final override fun visit(callAllocArrayNode: CallAllocArrayNode, data: Unit) = visit(callAllocArrayNode)
+    open fun visit(callAllocArrayNode: CallAllocArrayNode) {}
+    final override fun visit(arrayAccessNode: ArrayAccessNode, data: Unit) = visit(arrayAccessNode)
+    open fun visit(arrayAccessNode: ArrayAccessNode) {}
 }

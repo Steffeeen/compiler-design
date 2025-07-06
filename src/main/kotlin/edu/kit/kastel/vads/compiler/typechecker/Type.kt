@@ -32,6 +32,8 @@ sealed interface Type {
             Token.KeywordType.PRINT -> PRINT_FUNCTION
             Token.KeywordType.READ -> READ_FUNCTION
             Token.KeywordType.FLUSH -> FLUSH_FUNCTION
+            Token.KeywordType.ALLOC -> TODO()
+            Token.KeywordType.ALLOC_ARRAY -> TODO()
         }
     }
 }

@@ -58,4 +58,36 @@ abstract class VisitorWithParents : Visitor<Unit, Unit> {
     open fun visit(callBuiltinNode: CallBuiltinNode, parents: List<AstNode>) {}
     final override fun visit(parameterNode: ParameterNode, data: Unit) = withParent(parameterNode) { visit(parameterNode, parents) }
     open fun visit(parameterNode: ParameterNode, parents: List<AstNode>) {}
+    final override fun visit(nullLiteralNode: NullLiteralNode, data: Unit) = withParent(nullLiteralNode) { visit(nullLiteralNode, parents) }
+    open fun visit(nullLiteralNode: NullLiteralNode, parents: List<AstNode>) {}
+    final override fun visit(pointerDereferenceNode: PointerDereferenceNode, data: Unit) = withParent(pointerDereferenceNode) { visit(pointerDereferenceNode, parents) }
+    open fun visit(pointerDereferenceNode: PointerDereferenceNode, parents: List<AstNode>) {}
+    final override fun visit(fieldAccessNode: FieldAccessNode, data: Unit) = withParent(fieldAccessNode) { visit(fieldAccessNode, parents) }
+    open fun visit(fieldAccessNode: FieldAccessNode, parents: List<AstNode>) {}
+    final override fun visit(fieldDereferenceNode: FieldDereferenceNode, data: Unit) = withParent(fieldDereferenceNode) { visit(fieldDereferenceNode, parents) }
+    open fun visit(fieldDereferenceNode: FieldDereferenceNode, parents: List<AstNode>) {}
+    final override fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, data: Unit) =
+        withParent(lValuePointerDereferenceNode) { visit(lValuePointerDereferenceNode, parents) }
+
+    open fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, parents: List<AstNode>) {}
+    final override fun visit(lValueFieldAccessNode: LValueFieldAccessNode, data: Unit) = withParent(lValueFieldAccessNode) { visit(lValueFieldAccessNode, parents) }
+    open fun visit(lValueFieldAccessNode: LValueFieldAccessNode, parents: List<AstNode>) {}
+    final override fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, data: Unit) =
+        withParent(lValueFieldDereferenceNode) { visit(lValueFieldDereferenceNode, parents) }
+
+    open fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, parents: List<AstNode>) {}
+    final override fun visit(lValueArrayAccessNode: LValueArrayAccessNode, data: Unit) = withParent(lValueArrayAccessNode) { visit(lValueArrayAccessNode, parents) }
+    open fun visit(lValueArrayAccessNode: LValueArrayAccessNode, parents: List<AstNode>) {}
+    final override fun visit(structDeclarationNode: StructDeclarationNode, data: Unit) = withParent(structDeclarationNode) { visit(structDeclarationNode, parents) }
+    open fun visit(structDeclarationNode: StructDeclarationNode, parents: List<AstNode>) {}
+    final override fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, data: Unit) =
+        withParent(structFieldDeclarationNode) { visit(structFieldDeclarationNode, parents) }
+
+    open fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, parents: List<AstNode>) {}
+    final override fun visit(callAllocNode: CallAllocNode, data: Unit) = withParent(callAllocNode) { visit(callAllocNode, parents) }
+    open fun visit(callAllocNode: CallAllocNode, parents: List<AstNode>) {}
+    final override fun visit(callAllocArrayNode: CallAllocArrayNode, data: Unit) = withParent(callAllocArrayNode) { visit(callAllocArrayNode, parents) }
+    open fun visit(callAllocArrayNode: CallAllocArrayNode, parents: List<AstNode>) {}
+    final override fun visit(arrayAccessNode: ArrayAccessNode, data: Unit) = withParent(arrayAccessNode) { visit(arrayAccessNode, parents) }
+    open fun visit(arrayAccessNode: ArrayAccessNode, parents: List<AstNode>) {}
 }

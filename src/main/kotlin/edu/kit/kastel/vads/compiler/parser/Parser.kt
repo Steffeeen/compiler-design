@@ -38,7 +38,7 @@ private class Parser(private val tokenSource: TokenSource, private val options: 
             functions += parseFunction()
         }
 
-        return ProgramNode(functions)
+        return ProgramNode(functions, listOf())
     }
 
     private fun parseFunction(): FunctionNode {

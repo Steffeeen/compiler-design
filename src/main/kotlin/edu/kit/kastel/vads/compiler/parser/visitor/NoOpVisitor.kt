@@ -28,4 +28,17 @@ interface NoOpVisitor<T> : Visitor<T, Unit> {
     override fun visit(callNormalNode: CallNormalNode, data: T) {}
     override fun visit(callBuiltinNode: CallBuiltinNode, data: T) {}
     override fun visit(parameterNode: ParameterNode, data: T) {}
+    override fun visit(nullLiteralNode: NullLiteralNode, data: T) {}
+    override fun visit(pointerDereferenceNode: PointerDereferenceNode, data: T) {}
+    override fun visit(fieldAccessNode: FieldAccessNode, data: T) {}
+    override fun visit(fieldDereferenceNode: FieldDereferenceNode, data: T) {}
+    override fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, data: T) {}
+    override fun visit(lValueFieldAccessNode: LValueFieldAccessNode, data: T) {}
+    override fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, data: T) {}
+    override fun visit(lValueArrayAccessNode: LValueArrayAccessNode, data: T) {}
+    override fun visit(structDeclarationNode: StructDeclarationNode, data: T) {}
+    override fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, data: T) {}
+    override fun visit(callAllocNode: CallAllocNode, data: T) {}
+    override fun visit(callAllocArrayNode: CallAllocArrayNode, data: T) {}
+    override fun visit(arrayAccessNode: ArrayAccessNode, data: T) {}
 }
