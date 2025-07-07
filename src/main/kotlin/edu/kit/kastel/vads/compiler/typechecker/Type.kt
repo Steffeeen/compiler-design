@@ -1,6 +1,7 @@
 package edu.kit.kastel.vads.compiler.typechecker
 
 import edu.kit.kastel.vads.compiler.lexer.Token
+import edu.kit.kastel.vads.compiler.parser.SymbolName
 
 sealed interface Type {
     fun asString(): String
@@ -14,6 +15,24 @@ sealed interface Type {
     object BoolType : Type {
         override fun asString(): String {
             return "bool"
+        }
+    }
+
+    data class PointerType(val elementType: Type) : Type {
+        override fun asString(): String {
+            return "${elementType.asString()}*"
+        }
+    }
+
+    data class StructReferenceType(val structName: SymbolName) : Type {
+        override fun asString(): String {
+            return "struct $structName"
+        }
+    }
+
+    data class ArrayType(val elementType: Type) : Type {
+        override fun asString(): String {
+            return "${elementType.asString()}[]"
         }
     }
 

@@ -84,7 +84,7 @@ sealed interface AstNode {
 
     data class FunctionNode(val returnType: TypeNode, val parameters: List<ParameterNode>, val name: NameNode, val body: BlockNode) : AstNode {
         override val span get() = Span.SimpleSpan(returnType.span.start, body.span.end)
-        override val children: List<AstNode> = listOf(returnType, name, body)
+        override val children: List<AstNode> = listOf(returnType) + parameters + name + body
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 

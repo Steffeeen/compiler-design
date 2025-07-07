@@ -23,6 +23,14 @@ class TokenSource(private val tokens: List<Token>) {
         return tokens[index + 1]
     }
 
+    fun peek(offset: Int): Token? {
+        if (index + offset >= tokens.size) {
+            return null
+        }
+
+        return tokens[index + offset]
+    }
+
     fun hasMoreTokens(): Boolean {
         return index < tokens.size
     }
