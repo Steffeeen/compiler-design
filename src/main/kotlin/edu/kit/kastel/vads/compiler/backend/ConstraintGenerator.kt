@@ -3,7 +3,7 @@ package edu.kit.kastel.vads.compiler.backend
 import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 import edu.kit.kastel.vads.compiler.backend.x86.X86Registers
 
-interface ConstraintGenerator<T : Architecture> {
+interface ConstraintGenerator<T : Architecture<T>> {
     fun generateConstraints(instructions: List<AsmIr.Instruction>): List<RegisterConstraint<T>>
 }
 

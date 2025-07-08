@@ -4,7 +4,7 @@ import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 import kotlin.math.max
 import kotlin.math.min
 
-private data class SimpleRegisterAllocation<T : Architecture>(
+private data class SimpleRegisterAllocation<T : Architecture<T>>(
     override val numberOfStackVariables: Int,
     private val allocations: Map<AsmIr.Register, AllocationForRegister<T>>,
 ) : RegisterAllocation<T> {
@@ -13,7 +13,7 @@ private data class SimpleRegisterAllocation<T : Architecture>(
     }
 }
 
-data class AllocationForRegister<T : Architecture>(private val map: Map<AsmIr.Instruction, AllocationInformation<T>>) {
+data class AllocationForRegister<T : Architecture<T>>(private val map: Map<AsmIr.Instruction, AllocationInformation<T>>) {
     operator fun get(instruction: AsmIr.Instruction): AllocationInformation<T> = map[instruction]!!
 }
 
@@ -44,23 +44,18 @@ private class LiveRange() {
     }
 }
 
-class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : RegisterAllocator<T> {
-    override fun allocateRegisters(
-        availableRegisters: Set<Register<T>>,
-        function: AsmIr.Function,
-        stackSlotCreator: (Int) -> SpillLocation<T>,
-        argumentLocationCreator: (Int) -> ArgumentLocation<T>
-    ): RegisterAllocation<T> {
+class GraphColoringRegisterAllocator<T : Architecture<T>>(val architecture: T) : RegisterAllocator<T> {
+    override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function): RegisterAllocation<T> {
         val predecessors = calculatePredecessors(function)
         val successors = calculateSuccessors(predecessors)
 
         val availableRegistersSequence: Sequence<Location<T>> = availableRegisters.asSequence() + generateSequence(0) { it + 1 }
-            .map { stackSlotCreator(it) }
+            .map { architecture.createStackSlot(it) }
 
         return with(predecessors) {
             with(successors) {
                 with(architecture) {
-                    allocate(availableRegistersSequence, function, argumentLocationCreator)
+                    allocate(availableRegistersSequence, function)
                 }
             }
         }
@@ -68,11 +63,7 @@ class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : Re
 }
 
 context(predecessors: Predecessors, successors: Successors, architecture: T)
-private fun <T : Architecture> allocate(
-    availableRegisters: Sequence<Location<T>>,
-    function: AsmIr.Function,
-    argumentLocationCreator: (Int) -> ArgumentLocation<T>
-): RegisterAllocation<T> {
+private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location<T>>, function: AsmIr.Function): RegisterAllocation<T> {
     val instructionNumbering = numberInstructions(function.startBlock)
 
     val interferenceGraph = buildInterferenceGraph(instructionNumbering, function.returnBlock)
@@ -80,8 +71,7 @@ private fun <T : Architecture> allocate(
     val allocations = mutableMapOf<AsmIr.Register, MutableMap<AsmIr.Instruction, AllocationInformation<T>>>()
     val currentAllocations = mutableMapOf<AsmIr.Register, Location<T>>()
 
-    @Suppress("UNCHECKED_CAST")
-    val parameterLocations = (architecture.getArgumentRegisters().asSequence() + generateSequence(0) { it + 1 }.map { argumentLocationCreator(it) }) as Sequence<Location<T>>
+    val parameterLocations = (architecture.getArgumentRegisters().asSequence() + generateSequence(0) { it + 1 }.map { architecture.createArgumentLocation(it) })
     for ((index, parameterRegister) in function.parameters.withIndex()) {
         currentAllocations[parameterRegister] = parameterLocations.elementAt(index)
         allocations[parameterRegister] = mutableMapOf()

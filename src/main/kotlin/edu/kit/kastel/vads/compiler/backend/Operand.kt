@@ -1,25 +1,25 @@
 package edu.kit.kastel.vads.compiler.backend
 
-sealed interface Operand<T : Architecture>
-sealed interface Location<T : Architecture> : Operand<T>
-interface Immediate<T : Architecture> : Operand<T> {
+sealed interface Operand<T : Architecture<T>>
+sealed interface Location<T : Architecture<T>> : Operand<T>
+interface Immediate<T : Architecture<T>> : Operand<T> {
     val value: UInt
 }
 
-interface Register<T : Architecture> : Location<T> {
+interface Register<T : Architecture<T>> : Location<T> {
     val name: String
 }
 
-interface StackLocation<T : Architecture> : Location<T>
+interface StackLocation<T : Architecture<T>> : Location<T>
 
-interface SpillLocation<T : Architecture> : StackLocation<T> {
+interface SpillLocation<T : Architecture<T>> : StackLocation<T> {
     val index: Int
 }
 
-interface ArgumentLocation<T : Architecture> : StackLocation<T> {
+interface ArgumentLocation<T : Architecture<T>> : StackLocation<T> {
     val index: Int
 }
 
-interface Label<T : Architecture> : Operand<T> {
+interface Label<T : Architecture<T>> : Operand<T> {
     val name: String
 }

@@ -2,31 +2,26 @@ package edu.kit.kastel.vads.compiler.backend
 
 import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 
-interface RegisterAllocation<T : Architecture> {
+interface RegisterAllocation<T : Architecture<T>> {
     operator fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>>
     val numberOfStackVariables: Int
 }
 
-sealed interface AllocationInformation<T : Architecture> {
-    data class NormalRegister<T : Architecture>(val register: Register<T>) : AllocationInformation<T>
-    data class Spill<T : Architecture>(val register: Register<T>, val spillLocation: SpillLocation<T>) : AllocationInformation<T>
-    data class Reload<T : Architecture>(val register: Register<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
-    data class SpillAndReload<T : Architecture>(val register: Register<T>, val spillLocation: SpillLocation<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
+sealed interface AllocationInformation<T : Architecture<T>> {
+    data class NormalRegister<T : Architecture<T>>(val register: Register<T>) : AllocationInformation<T>
+    data class Spill<T : Architecture<T>>(val register: Register<T>, val spillLocation: SpillLocation<T>) : AllocationInformation<T>
+    data class Reload<T : Architecture<T>>(val register: Register<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
+    data class SpillAndReload<T : Architecture<T>>(val register: Register<T>, val spillLocation: SpillLocation<T>, val reloadLocation: StackLocation<T>) : AllocationInformation<T>
 }
 
-sealed interface RegisterConstraint<T : Architecture> {
-    sealed interface InstructionConstraint<T : Architecture> : RegisterConstraint<T> {
+sealed interface RegisterConstraint<T : Architecture<T>> {
+    sealed interface InstructionConstraint<T : Architecture<T>> : RegisterConstraint<T> {
         val instruction: AsmIr.Instruction
     }
 
-    data class NeedsFreeRegisters<T : Architecture>(override val instruction: AsmIr.Instruction, val registers: Set<Register<T>>) : InstructionConstraint<T>
+    data class NeedsFreeRegisters<T : Architecture<T>>(override val instruction: AsmIr.Instruction, val registers: Set<Register<T>>) : InstructionConstraint<T>
 }
 
-interface RegisterAllocator<T : Architecture> {
-    fun allocateRegisters(
-        availableRegisters: Set<Register<T>>,
-        function: AsmIr.Function,
-        stackSlotCreator: (Int) -> SpillLocation<T>,
-        argumentLocationCreator: (Int) -> ArgumentLocation<T>,
-    ): RegisterAllocation<T>
+interface RegisterAllocator<T : Architecture<T>> {
+    fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function): RegisterAllocation<T>
 }
