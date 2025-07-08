@@ -11,6 +11,8 @@ import edu.kit.kastel.vads.compiler.util.NamespaceStack
 sealed interface TypeError {
     data class TypeMismatchSingleNode(val node: AstNode, val actual: Type, val expected: Type) : TypeError
     data class TypeMismatchTwoNodes(val node1: AstNode, val type1: Type, val node2: AstNode, val type2: Type) : TypeError
+    data class TypeMismatchSingleNodeKind(val node: AstNode, val actual: Type, val expected: Type.Kind) : TypeError
+    data class NullDereference(val node: AstNode) : TypeError
 }
 
 object TypeChecking : SemanticAnalysis {
@@ -18,9 +20,10 @@ object TypeChecking : SemanticAnalysis {
         val errors = mutableListOf<TypeError>()
 
         val functionTypes =
-            program.topLevelFunctions.associate { function -> function.name.name to Type.FunctionType(function.returnType.type, function.parameters.map { it.type.type }) }
+            program.topLevelFunctions.associate { (returnType, parameters, name) -> name.name to Type.FunctionType(returnType.type, parameters.map { it.type.type }) }
+        val structTypes = program.structDeclarations.associate { (name, fields) -> name.name to Type.StructType(name.name, fields.associate { it.name.name to it.type.type }) }
 
-        val visitor = TypeCheckingVisitor(functionTypes)
+        val visitor = TypeCheckingVisitor(functionTypes, structTypes)
         program.accept(visitor, Unit)
         errors += visitor.errors
 
@@ -28,10 +31,11 @@ object TypeChecking : SemanticAnalysis {
     }
 }
 
-private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Type.FunctionType>) : VisitorWithParents() {
+private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Type.FunctionType>, private val structTypes: Map<SymbolName, Type.StructType>) : VisitorWithParents() {
 
     val errors: MutableList<TypeError> = mutableListOf()
     private val typeCache: MutableMap<AstNode.ExpressionNode, Type> = mutableMapOf()
+    private val lValueTypeCache: MutableMap<AstNode.LValueNode, Type> = mutableMapOf()
     private val symbolTable = NamespaceStack<Type>()
 
     override fun visit(blockNode: AstNode.BlockNode, parents: List<AstNode>) {
@@ -54,8 +58,7 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
     }
 
     override fun visit(assignmentNode: AstNode.AssignmentNode, parents: List<AstNode>) {
-        require(assignmentNode.lValue is AstNode.LValueIdentifierNode) { TODO("Currently only identifier lValues are supported") }
-        val lValueType = symbolTable[assignmentNode.lValue.name] ?: error("Variable status analysis failed")
+        val lValueType = typeCheck(assignmentNode.lValue)
         val rValueType = typeCheck(assignmentNode.expression)
 
         if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
@@ -91,12 +94,115 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         val expectedType = when (unaryOperationNode.operator) {
             Token.OperatorType.SUB_OR_NEGATE, Token.OperatorType.BITWISE_NOT -> Type.IntType
             Token.OperatorType.LOGICAL_NOT -> Type.BoolType
-            Token.OperatorType.DEREFERENCE_OR_MUL -> TODO()
+            Token.OperatorType.DEREFERENCE_OR_MUL -> error("Unary dereference operator are handled in pointer dereference node")
         }
 
         compareTypes(expectedType, expressionType, unaryOperationNode.expression)
 
         typeCache[unaryOperationNode] = expectedType
+    }
+
+    override fun visit(arrayAccessNode: AstNode.ArrayAccessNode, parents: List<AstNode>) {
+        val expressionType = typeCheck(arrayAccessNode.expression)
+        compareTypes(Type.Kind.ARRAY, expressionType, arrayAccessNode.expression)
+
+        val indexType = typeCheck(arrayAccessNode.index)
+        compareTypes(Type.IntType, indexType, arrayAccessNode.index)
+
+        typeCache[arrayAccessNode] = (expressionType as Type.ArrayType).elementType
+    }
+
+    override fun visit(pointerDereferenceNode: AstNode.PointerDereferenceNode, parents: List<AstNode>) {
+        pointerDereferenceNode.expression.accept(this, Unit)
+        val expressionType = typeCheck(pointerDereferenceNode.expression)
+        compareTypes(Type.Kind.POINTER, expressionType, pointerDereferenceNode.expression)
+
+        typeCache[pointerDereferenceNode] = (expressionType as? Type.PointerType)?.elementType ?: Type.NullType
+    }
+
+    override fun visit(fieldAccessNode: AstNode.FieldAccessNode, parents: List<AstNode>) {
+        val expressionType = typeCheck(fieldAccessNode.expression)
+        if (!compareTypes(Type.Kind.STRUCT_REFERENCE, expressionType, fieldAccessNode.expression)) {
+            typeCache[fieldAccessNode] = expressionType
+            return
+        }
+
+        val structType = structTypes[(expressionType as Type.StructReferenceType).structName]!!
+        val fieldType = structType.fields[fieldAccessNode.fieldName.name] ?: error("Field '${fieldAccessNode.fieldName.name}' not found in struct '${structType.name}'")
+
+        typeCache[fieldAccessNode] = fieldType
+    }
+
+    override fun visit(fieldDereferenceNode: AstNode.FieldDereferenceNode, parents: List<AstNode>) {
+        val expressionType = typeCheck(fieldDereferenceNode.expression)
+        if (!compareTypes(Type.Kind.POINTER, expressionType, fieldDereferenceNode.expression)) {
+            typeCache[fieldDereferenceNode] = expressionType
+            return
+        }
+
+        if (expressionType == Type.NullType) {
+            errors += TypeError.NullDereference(fieldDereferenceNode.expression)
+            typeCache[fieldDereferenceNode] = Type.NullType
+            return
+        }
+
+        val dereferencedType = (expressionType as Type.PointerType).elementType
+
+        if (!compareTypes(Type.Kind.STRUCT_REFERENCE, dereferencedType, fieldDereferenceNode.expression)) {
+            typeCache[fieldDereferenceNode] = dereferencedType
+            return
+        }
+
+        val structType = structTypes[(dereferencedType as Type.StructReferenceType).structName]!!
+        val fieldType = structType.fields[fieldDereferenceNode.fieldName.name]!!
+        typeCache[fieldDereferenceNode] = fieldType
+    }
+
+    override fun visit(lValuePointerDereferenceNode: AstNode.LValuePointerDereferenceNode, parents: List<AstNode>) {
+        val lValueType = typeCheck(lValuePointerDereferenceNode.lValue)
+        compareTypes(Type.Kind.POINTER, lValueType, lValuePointerDereferenceNode.lValue)
+
+        lValueTypeCache[lValuePointerDereferenceNode] = (lValueType as Type.PointerType).elementType
+    }
+
+    override fun visit(lValueFieldAccessNode: AstNode.LValueFieldAccessNode, parents: List<AstNode>) {
+        val lValueType = typeCheck(lValueFieldAccessNode.lValue)
+        compareTypes(Type.Kind.STRUCT_REFERENCE, lValueType, lValueFieldAccessNode.lValue)
+
+        val structType = structTypes[(lValueType as Type.StructReferenceType).structName]!!
+        val fieldType = structType.fields[lValueFieldAccessNode.fieldName.name]!!
+
+        lValueTypeCache[lValueFieldAccessNode] = fieldType
+    }
+
+    override fun visit(lValueFieldDereferenceNode: AstNode.LValueFieldDereferenceNode, parents: List<AstNode>) {
+        val lValueType = typeCheck(lValueFieldDereferenceNode.lValue)
+        if (!compareTypes(Type.Kind.POINTER, lValueType, lValueFieldDereferenceNode.lValue)) {
+            lValueTypeCache[lValueFieldDereferenceNode] = lValueType
+            return
+        }
+
+        val dereferencedType = (lValueType as Type.PointerType).elementType
+
+        if (!compareTypes(Type.Kind.STRUCT_REFERENCE, dereferencedType, lValueFieldDereferenceNode.lValue)) {
+            lValueTypeCache[lValueFieldDereferenceNode] = dereferencedType
+            return
+        }
+
+        val structType = structTypes[(dereferencedType as Type.StructReferenceType).structName]!!
+        val fieldType = structType.fields[lValueFieldDereferenceNode.fieldName.name]!!
+
+        lValueTypeCache[lValueFieldDereferenceNode] = fieldType
+    }
+
+    override fun visit(lValueArrayAccessNode: AstNode.LValueArrayAccessNode, parents: List<AstNode>) {
+        val lValueType = typeCheck(lValueArrayAccessNode.lValue)
+        compareTypes(Type.Kind.ARRAY, lValueType, lValueArrayAccessNode.lValue)
+
+        val indexType = typeCheck(lValueArrayAccessNode.index)
+        compareTypes(Type.IntType, indexType, lValueArrayAccessNode.index)
+
+        lValueTypeCache[lValueArrayAccessNode] = (lValueType as Type.ArrayType).elementType
     }
 
     override fun visit(returnNode: AstNode.ReturnNode, parents: List<AstNode>) {
@@ -188,6 +294,9 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         val type = when (node) {
             is AstNode.LiteralNode -> node.type
             is AstNode.IdentifierExpressionNode -> symbolTable[node.name] ?: error("Variable status analysis failed")
+            is AstNode.CallAllocNode -> Type.PointerType(node.type.type)
+            is AstNode.CallAllocArrayNode -> Type.ArrayType(node.type.type)
+            is AstNode.NullLiteralNode -> Type.NullType
 
             else -> {
                 node.accept(this, Unit)
@@ -197,17 +306,45 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         return type
     }
 
+    private fun typeCheck(node: AstNode.LValueNode): Type {
+        return when (node) {
+            is AstNode.LValueIdentifierNode -> symbolTable[node.name] ?: error("Variable status analysis failed")
+            else -> {
+                node.accept(this, Unit)
+                lValueTypeCache[node] ?: error("Type checking failed for l-value node")
+            }
+        }
+    }
+
     private fun typeCheck(node: AstNode.StatementNode) {
         node.accept(this, Unit)
     }
 
-    private fun compareTypes(expected: Type, actual: Type, node: AstNode) {
+    private fun compareTypes(expected: Type.Kind, actual: Type, node: AstNode): Boolean {
+        if (expected != actual.kind) {
+            errors += TypeError.TypeMismatchSingleNodeKind(node, actual, expected)
+            return false
+        }
+        return true
+    }
+
+    private fun compareTypes(expected: Type, actual: Type, node: AstNode): Boolean {
+        if (expected is Type.PointerType && actual is Type.NullType) {
+            // Allow null type for pointer types
+            return true
+        }
         if (expected != actual) {
             errors += TypeError.TypeMismatchSingleNode(node, actual, expected)
+            return false
         }
+        return true
     }
 
     private fun compareTypes(node1: AstNode, type1: Type, node2: AstNode, type2: Type) {
+        if (type1 is Type.PointerType && type2 is Type.NullType) {
+            // Allow null type for pointer types
+            return
+        }
         if (type1 != type2) {
             errors += TypeError.TypeMismatchTwoNodes(node1, type1, node2, type2)
         }
