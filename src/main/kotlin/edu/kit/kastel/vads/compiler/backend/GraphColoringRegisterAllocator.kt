@@ -119,7 +119,14 @@ private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location
             val allocationInformation = if (operand in currentAllocations) {
                 val reloadLocation = currentAllocations[operand]!!
                 require(reloadLocation is SpillLocation<T>) { "should be a stack location" }
-                AllocationInformation.SpillAndReload(registerToSpill as Register<T>, locationToUse, reloadLocation)
+                val finalLocationToUse = if (locationToUse == reloadLocation) {
+                    // We can't simultaneously spill and reload to/from the same location, so we need to find a different location to spill to
+                    (available - reloadLocation).first()
+                } else {
+                    locationToUse
+                }
+                require(finalLocationToUse is SpillLocation<T>) { "should be a stack location" }
+                AllocationInformation.SpillAndReload(registerToSpill as Register<T>, finalLocationToUse, reloadLocation)
             } else {
                 AllocationInformation.Spill(registerToSpill as Register<T>, locationToUse)
             }
