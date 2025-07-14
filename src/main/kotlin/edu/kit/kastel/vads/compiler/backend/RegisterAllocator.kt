@@ -5,6 +5,7 @@ import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 interface RegisterAllocation<T : Architecture<T>> {
     operator fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>>
     val numberOfStackVariables: Int
+    val calleeSavedRegisterReloads: List<AllocationInformation.Reload<T>>
 }
 
 sealed interface AllocationInformation<T : Architecture<T>> {

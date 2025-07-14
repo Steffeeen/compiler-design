@@ -7,6 +7,7 @@ import kotlin.math.min
 private data class SimpleRegisterAllocation<T : Architecture<T>>(
     override val numberOfStackVariables: Int,
     private val allocations: Map<AsmIr.Register, AllocationForRegister<T>>,
+    override val calleeSavedRegisterReloads: List<AllocationInformation.Reload<T>>,
 ) : RegisterAllocation<T> {
     override fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>> {
         return instruction.usedRegisters().associateWith { allocations[it]!![instruction] }
@@ -77,6 +78,14 @@ private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location
         allocations[parameterRegister] = mutableMapOf()
     }
 
+    // Create synthetic AsmIr registers that represent the callee-saved registers. These use the indices -1, -2, -3, ...
+    val syntheticAsmIrRegistersForCalleeSavedRegisters = architecture.getCalleeSavedRegisters().mapIndexed { index, register -> register to AsmIr.Register(-index - 1) }
+    for ((register, asmRegister) in syntheticAsmIrRegistersForCalleeSavedRegisters) {
+        currentAllocations[asmRegister] = register
+        allocations[asmRegister] = mutableMapOf()
+    }
+    val syntheticAsmIrRegisters = syntheticAsmIrRegistersForCalleeSavedRegisters.map { it.second }
+
     for (instruction in instructionNumbering.entries.sortedBy { it.value }.map { it.key }) {
         fun handleOperand(instruction: AsmIr.Instruction, operand: AsmIr.Operand) {
             if (operand is AsmIr.Immediate) {
@@ -89,7 +98,8 @@ private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location
                 return
             }
 
-            val interfering = (interferenceGraph[operand] ?: setOf()).mapNotNull { currentAllocations[it] }
+            val interferingFromGraph = interferenceGraph[operand] ?: setOf()
+            val interfering = (interferingFromGraph + syntheticAsmIrRegisters).mapNotNull { currentAllocations[it] }
             val available = availableRegisters - interfering
 
             val locationToUse = available.first()
@@ -168,11 +178,23 @@ private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location
         }
     }
 
+    // Restore the callee-saved registers at the end of the function
+    val calleeSavedRegisterReloads = syntheticAsmIrRegistersForCalleeSavedRegisters.mapNotNull { (register, asmRegister) ->
+        if (currentAllocations[asmRegister] == register) {
+            // The callee-saved register is still in the same location, no need to reload it
+            null
+        } else {
+            val reloadLocation = currentAllocations[asmRegister]!!
+            require(reloadLocation is SpillLocation<T>) { "should be a stack location" }
+            AllocationInformation.Reload(register, reloadLocation)
+        }
+    }
+
     val maxSpillIndex1 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.Spill<T>>().maxOfOrNull { it.spillLocation.index }
     val maxSpillIndex2 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.SpillAndReload<T>>().maxOfOrNull { it.spillLocation.index }
     val numberOfStackVariables = maxOf(maxSpillIndex1 ?: 0, maxSpillIndex2 ?: 0) + 1 // +1 because we start counting from 0
     val finalAllocations = allocations.mapValues { AllocationForRegister(it.value) }
-    return SimpleRegisterAllocation(numberOfStackVariables, finalAllocations)
+    return SimpleRegisterAllocation(numberOfStackVariables, finalAllocations, calleeSavedRegisterReloads)
 }
 
 context(predecessors: Predecessors, successors: Successors)

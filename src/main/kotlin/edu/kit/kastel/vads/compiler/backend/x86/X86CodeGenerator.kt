@@ -64,6 +64,12 @@ class X86CodeGenerator : CodeGenerator<X86Architecture> {
             is AsmIr.Return -> {
                 with(registerAllocation[instruction]) {
                     mov(X86Registers.EAX, instruction.value.toX86Operand())
+
+                    val calleeSavedRegisterReloads = registerAllocation.calleeSavedRegisterReloads
+                    for (reload in calleeSavedRegisterReloads) {
+                        reload(reload.reloadLocation, reload.register)
+                    }
+
                     leave()
                     ret()
                 }
