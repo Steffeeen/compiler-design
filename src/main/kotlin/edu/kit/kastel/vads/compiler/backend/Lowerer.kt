@@ -313,7 +313,9 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.NormalCallNode -> generateNormalCallNode(node, destination)
             is IrNode.ParameterNode -> {
                 val source = source(node)
-                currentBlock.addFirst(AsmIr.Move(destination, source))
+                if (source != destination) {
+                    currentBlock.addFirst(AsmIr.Move(destination, source))
+                }
             }
         }
     }
