@@ -13,6 +13,9 @@ sealed interface TypeError {
     data class TypeMismatchTwoNodes(val node1: AstNode, val type1: Type, val node2: AstNode, val type2: Type) : TypeError
     data class TypeMismatchSingleNodeKind(val node: AstNode, val actual: Type, val expected: Type.Kind) : TypeError
     data class NullDereference(val node: AstNode) : TypeError
+    data class LargeTypeComparison(val node: AstNode, val type: Type) : TypeError
+    data class LargeTypeAssignment(val node: AstNode, val type: Type) : TypeError
+    data class LargeTypeReturn(val node: AstNode, val type: Type) : TypeError
 }
 
 object TypeChecking : SemanticAnalysis {
@@ -61,6 +64,11 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         val lValueType = typeCheck(assignmentNode.lValue)
         val rValueType = typeCheck(assignmentNode.expression)
 
+        if (lValueType.isLargeType()) {
+            errors += TypeError.LargeTypeAssignment(assignmentNode, lValueType)
+            return
+        }
+
         if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
             compareTypes(assignmentNode.lValue, lValueType, assignmentNode.expression, rValueType)
             return
@@ -76,6 +84,13 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
         val rightType = typeCheck(binaryOperationNode.right)
 
         if (binaryOperationNode.operatorType == Token.OperatorType.EQUAL || binaryOperationNode.operatorType == Token.OperatorType.NOT_EQUAL) {
+            if (leftType.isLargeType() || rightType.isLargeType()) {
+                val largeType = if (leftType.isLargeType()) leftType else rightType
+                errors += TypeError.LargeTypeComparison(binaryOperationNode, largeType)
+                typeCache[binaryOperationNode] = Type.BoolType
+                return
+            }
+
             compareTypes(binaryOperationNode.left, leftType, binaryOperationNode.right, rightType)
             typeCache[binaryOperationNode] = Type.BoolType
             return
@@ -113,7 +128,6 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
     }
 
     override fun visit(pointerDereferenceNode: AstNode.PointerDereferenceNode, parents: List<AstNode>) {
-        pointerDereferenceNode.expression.accept(this, Unit)
         val expressionType = typeCheck(pointerDereferenceNode.expression)
         compareTypes(Type.Kind.POINTER, expressionType, pointerDereferenceNode.expression)
 
@@ -160,14 +174,20 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
 
     override fun visit(lValuePointerDereferenceNode: AstNode.LValuePointerDereferenceNode, parents: List<AstNode>) {
         val lValueType = typeCheck(lValuePointerDereferenceNode.lValue)
-        compareTypes(Type.Kind.POINTER, lValueType, lValuePointerDereferenceNode.lValue)
+        if (!compareTypes(Type.Kind.POINTER, lValueType, lValuePointerDereferenceNode.lValue)) {
+            lValueTypeCache[lValuePointerDereferenceNode] = lValueType
+            return
+        }
 
         lValueTypeCache[lValuePointerDereferenceNode] = (lValueType as Type.PointerType).elementType
     }
 
     override fun visit(lValueFieldAccessNode: AstNode.LValueFieldAccessNode, parents: List<AstNode>) {
         val lValueType = typeCheck(lValueFieldAccessNode.lValue)
-        compareTypes(Type.Kind.STRUCT_REFERENCE, lValueType, lValueFieldAccessNode.lValue)
+        if (!compareTypes(Type.Kind.STRUCT_REFERENCE, lValueType, lValueFieldAccessNode.lValue)) {
+            lValueTypeCache[lValueFieldAccessNode] = lValueType
+            return
+        }
 
         val structType = structTypes[(lValueType as Type.StructReferenceType).structName]!!
         val fieldType = structType.fields[lValueFieldAccessNode.fieldName.name]!!
@@ -280,6 +300,10 @@ private class TypeCheckingVisitor(private val functionTypes: Map<SymbolName, Typ
     }
 
     override fun visit(functionNode: AstNode.FunctionNode, parents: List<AstNode>) {
+        if (functionNode.returnType.type.isLargeType()) {
+            errors += TypeError.LargeTypeReturn(functionNode, functionNode.returnType.type)
+            return
+        }
         createNamespace {
             functionNode.parameters.forEach { it.accept(this, Unit) }
             functionNode.body.accept(this, Unit)
