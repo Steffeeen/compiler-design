@@ -142,7 +142,7 @@ sealed interface Token {
 
         object DEREFERENCE_OR_MUL : UnaryOperatorType, BinaryOperatorType {
             override val value = "*"
-            override val unaryPrecedence = 15
+            override val unaryPrecedence = 14
             override val unaryAssociativity = RIGHT
             override val binaryPrecedence = 12
             override val binaryAssociativity = LEFT
@@ -160,8 +160,8 @@ sealed interface Token {
             override val binaryAssociativity = LEFT
         }
 
-        object FIELD_DEREFERENCE : BinaryOperatorTypeImpl("->", 14, LEFT)
-        object FIELD_ACCESS : BinaryOperatorTypeImpl(".", 14, LEFT)
+        object FIELD_DEREFERENCE : BinaryOperatorTypeImpl("->", 15, LEFT)
+        object FIELD_ACCESS : BinaryOperatorTypeImpl(".", 15, LEFT)
         object LEFT_SHIFT : BinaryOperatorTypeImpl("<<", 10, LEFT)
         object RIGHT_SHIFT : BinaryOperatorTypeImpl(">>", 10, LEFT)
         object LESS_THAN : BinaryOperatorTypeImpl("<", 9, LEFT)
