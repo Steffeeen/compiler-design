@@ -1,7 +1,6 @@
 package edu.kit.kastel.vads.compiler.ir
 
 import edu.kit.kastel.vads.compiler.CompilerOptions
-import edu.kit.kastel.vads.compiler.ir.IrNode.*
 import edu.kit.kastel.vads.compiler.lexer.Token
 import edu.kit.kastel.vads.compiler.parser.AstNode
 import edu.kit.kastel.vads.compiler.parser.SymbolName
@@ -208,9 +207,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val (expressionIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(unaryOperationNode.expression, lastSideEffectNode, lastControlNode)
 
         val unaryOperationIrNode = when (unaryOperationNode.operator) {
-            Token.OperatorType.SUB_OR_NEGATE -> NegateNode(expressionIrNode)
-            Token.OperatorType.LOGICAL_NOT -> LogicalNotNode(expressionIrNode)
-            Token.OperatorType.BITWISE_NOT -> BitwiseNotNode(expressionIrNode)
+            Token.OperatorType.SUB_OR_NEGATE -> IrNode.NegateNode(expressionIrNode)
+            Token.OperatorType.LOGICAL_NOT -> IrNode.LogicalNotNode(expressionIrNode)
+            Token.OperatorType.BITWISE_NOT -> IrNode.BitwiseNotNode(expressionIrNode)
             Token.OperatorType.DEREFERENCE_OR_MUL -> TODO()
         }
 
@@ -647,9 +646,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
         val (arguments, newSideEffectNode, newControlNode) = createFunctionCallArguments(astNode.arguments, lastSideEffectNode, lastControlNode)
 
         val node = when (astNode.keyword) {
-            Token.KeywordType.PRINT -> PrintNode(arguments.first(), newSideEffectNode, newControlNode)
-            Token.KeywordType.READ -> ReadNode(newSideEffectNode, newControlNode)
-            Token.KeywordType.FLUSH -> FlushNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.PRINT -> IrNode.PrintNode(arguments.first(), newSideEffectNode, newControlNode)
+            Token.KeywordType.READ -> IrNode.ReadNode(newSideEffectNode, newControlNode)
+            Token.KeywordType.FLUSH -> IrNode.FlushNode(newSideEffectNode, newControlNode)
             Token.KeywordType.ALLOC -> TODO()
             Token.KeywordType.ALLOC_ARRAY -> TODO()
         }
@@ -686,14 +685,6 @@ private class SsaConstructor(val compilerOptions: CompilerOptions) {
     context(symbolTable: SymbolTable)
     private fun readVariable(variableName: SymbolName): IrNode.DataNode {
         return symbolTable[variableName]!!
-    }
-
-    context(symbolTable: SymbolTable)
-    private inline fun <T> createNamespace(block: () -> T): T {
-        symbolTable.pushNamespace()
-        val result = block()
-        symbolTable.popNamespace()
-        return result
     }
 
     private inline fun <T> createLoopInformation(loopRegion: IrNode.LoopRegionNode, block: () -> T): Pair<T, LoopInformation> {
