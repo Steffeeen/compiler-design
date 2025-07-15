@@ -142,6 +142,11 @@ private fun IrNode.displayName(): String {
         is IrNode.PhiNode -> "$baseName [${this.name.asString()}]"
         is IrNode.NormalCallNode -> "$baseName [${this.name.asString()}]"
         is IrNode.ParameterNode -> "$baseName [${this.name.asString()}]"
+        is IrNode.AllocateStructNode -> "$baseName [${this.type.asString()}]"
+        is IrNode.FieldAccessLoadNode -> "$baseName [${this.fieldName.asString()}]"
+        is IrNode.FieldAccessStoreNode -> "$baseName [${this.fieldName.asString()}]"
+        is IrNode.FieldDereferenceLoadNode -> "$baseName [${this.fieldName.asString()}]"
+        is IrNode.FieldDereferenceStoreNode -> "$baseName [${this.fieldName.asString()}]"
         else -> baseName
     }
 }

@@ -120,6 +120,7 @@ private class Lowerer(private val irGraph: IrGraph) {
 
                 is IrNode.FlushNode -> node.controlSuccessors().forEach { visitNode(it) }
                 is IrNode.ReadNode -> node.controlSuccessors().forEach { visitNode(it) }
+                is IrNode.AllocateStructNode -> TODO()
             }
         }
 
@@ -167,6 +168,13 @@ private class Lowerer(private val irGraph: IrGraph) {
             }
 
             IrNode.StartNode -> {}
+            is IrNode.FieldAccessLoadNode -> TODO()
+            is IrNode.FieldAccessStoreNode -> TODO()
+            is IrNode.FieldDereferenceLoadNode -> TODO()
+            is IrNode.FieldDereferenceStoreNode -> TODO()
+            is IrNode.PointerDereferenceLoadNode -> TODO()
+            is IrNode.PointerDereferenceStoreNode -> TODO()
+            is IrNode.StoreNode -> TODO()
         }
 
         generatedNodes.add(sideEffectNode)
@@ -317,6 +325,15 @@ private class Lowerer(private val irGraph: IrGraph) {
                     currentBlock.addFirst(AsmIr.Move(destination, source))
                 }
             }
+
+            is IrNode.AllocateStructNode -> TODO()
+            is IrNode.FieldAccessLoadNode -> TODO()
+            is IrNode.FieldAccessStoreNode -> TODO()
+            is IrNode.FieldDereferenceLoadNode -> TODO()
+            is IrNode.FieldDereferenceStoreNode -> TODO()
+            is IrNode.PointerDereferenceLoadNode -> TODO()
+            is IrNode.PointerDereferenceStoreNode -> TODO()
+            is IrNode.StoreNode -> TODO()
         }
     }
 
@@ -449,6 +466,7 @@ private class Lowerer(private val irGraph: IrGraph) {
             is IrNode.RegionNode -> "region_${controlNode.hashCode()}"
             is IrNode.BuiltinCallNode -> error("BuiltinCallNode does not have a label")
             is IrNode.NormalCallNode -> error("NormalCallNode does not have a label")
+            is IrNode.AllocateStructNode -> TODO()
         }.replace("-", "_")
         return AsmIr.Label(name)
     }
