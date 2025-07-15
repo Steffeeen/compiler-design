@@ -65,35 +65,27 @@ sealed interface IrNode {
         override val dataInputs: List<DataNode> = listOf()
     }
 
-    class AllocateStructNode(val type: Type.StructType, override val control: ControlNode) : ControlRelevantNode, DataNode {
+    class AllocateStructNode(val type: Type.StructType) : DataNode {
         override val dataInputs: List<DataNode> = listOf()
     }
 
-    class StoreNode(val location: DataNode, val value: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+    class StoreNode(val location: DataNode, val value: DataNode, override val sideEffect: SideEffectNode) : DataNodeConsumingNode, SideEffectRelevantNode {
         override val dataInputs: List<DataNode> = listOf(location, value)
     }
 
-    class FieldAccessLoadNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+    class LoadNode(val location: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(location)
+    }
+
+    class FieldAccessNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
         override val dataInputs: List<DataNode> = listOf(struct)
     }
 
-    class FieldAccessStoreNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+    class FieldDereferenceNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
         override val dataInputs: List<DataNode> = listOf(struct)
     }
 
-    class FieldDereferenceLoadNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
-        override val dataInputs: List<DataNode> = listOf(struct)
-    }
-
-    class FieldDereferenceStoreNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
-        override val dataInputs: List<DataNode> = listOf(struct)
-    }
-
-    class PointerDereferenceLoadNode(val pointer: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
-        override val dataInputs: List<DataNode> = listOf(pointer)
-    }
-
-    class PointerDereferenceStoreNode(val pointer: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+    class PointerDereferenceNode(val pointer: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
         override val dataInputs: List<DataNode> = listOf(pointer)
     }
 

@@ -22,6 +22,7 @@ import edu.kit.kastel.vads.compiler.parser.TokenSource
 import edu.kit.kastel.vads.compiler.parser.parse
 import edu.kit.kastel.vads.compiler.parser.printAst
 import edu.kit.kastel.vads.compiler.semantic.analyzeProgram
+import edu.kit.kastel.vads.compiler.typechecker.createTypeInformation
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
@@ -68,7 +69,11 @@ private fun CompilerOptions.runCompiler() {
         println(printAst(program))
     }
 
-    val irProgram = buildIr(program)
+    val typeInformation = createTypeInformation(program)
+
+    val irProgram = with(typeInformation) {
+        buildIr(program)
+    }
 
     if (printIrToFile) {
         // currently only the main function exists, thus only it gets printed

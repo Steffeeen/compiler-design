@@ -7,22 +7,17 @@ import edu.kit.kastel.vads.compiler.parser.SymbolName
 import edu.kit.kastel.vads.compiler.parser.visitor.RecursivePostorderVisitor
 import edu.kit.kastel.vads.compiler.parser.visitor.VisitorWithoutData
 import edu.kit.kastel.vads.compiler.typechecker.Type
+import edu.kit.kastel.vads.compiler.typechecker.TypeInformation
 import edu.kit.kastel.vads.compiler.util.NamespaceStack
 
-context(compilerOptions: CompilerOptions)
+context(compilerOptions: CompilerOptions, typeInformation: TypeInformation)
 fun buildIr(program: AstNode.ProgramNode): IrProgram {
-    val structTypes = program.structDeclarations.map { createStructType(it) }
-    val graphs = program.topLevelFunctions.map { buildIr(it, structTypes) }
+    val graphs = program.topLevelFunctions.map { buildIr(it) }
     return IrProgram(graphs)
 }
 
-private fun createStructType(structDeclaration: AstNode.StructDeclarationNode): Type.StructType {
-    val map = structDeclaration.fields.associateTo(linkedMapOf()) { it.name.name to it.type.type }
-    return Type.StructType(structDeclaration.name.name, map)
-}
-
-context(compilerOptions: CompilerOptions)
-private fun buildIr(function: AstNode.FunctionNode, structTypes: List<Type.StructType>): IrGraph = SsaConstructor(compilerOptions, structTypes).buildIr(function)
+context(compilerOptions: CompilerOptions, typeInformation: TypeInformation)
+private fun buildIr(function: AstNode.FunctionNode): IrGraph = SsaConstructor(compilerOptions, typeInformation).buildIr(function)
 
 private data class StatementReturn(val sideEffectNode: IrNode.SideEffectNode, val controlNode: IrNode.ControlNode?, val controlFlowEnded: Boolean = false)
 private typealias ExpressionReturn = Triple<IrNode.DataNode, IrNode.SideEffectNode, IrNode.ControlNode>
@@ -45,7 +40,7 @@ private class LoopInformation(val loopRegion: IrNode.LoopRegionNode) {
     }
 }
 
-private class SsaConstructor(val compilerOptions: CompilerOptions, private val structTypes: List<Type.StructType>) {
+private class SsaConstructor(val compilerOptions: CompilerOptions, private val typeInformation: TypeInformation) {
     private val returnNodes = mutableListOf<IrNode.ReturnNode>()
     private val loopStack = mutableListOf<LoopInformation>()
     private val currentLoopInformation get() = loopStack.last()
@@ -300,73 +295,43 @@ private class SsaConstructor(val compilerOptions: CompilerOptions, private val s
             return StatementReturn(newSideEffectNode2, newControlNode)
         }
 
+        val (locationNode, newSideEffectNode) = createLValueLocationNode(assignmentNode.lValue, lastSideEffectNode)
         val (valueNode, newSideEffectNode2, controlNode) = if (desugar == null) {
             // "normal" assignment
-            createIrNodeForExpression(assignmentNode.expression, lastSideEffectNode, lastControlNode)
+            createIrNodeForExpression(assignmentNode.expression, newSideEffectNode, lastControlNode)
         } else {
             // desugared assignment
-            val (loadNode, newSideEffectNode) = createLValueLoadNode(assignmentNode.lValue, lastSideEffectNode)
-            val (expressionNode, newSideEffectNode2, controlNode) = createIrNodeForExpression(assignmentNode.expression, newSideEffectNode, lastControlNode)
+            val loadNode = IrNode.LoadNode(locationNode, newSideEffectNode)
+            val (expressionNode, newSideEffectNode2, controlNode) = createIrNodeForExpression(assignmentNode.expression, loadNode, lastControlNode)
             val (newValue, newSideEffectNode3) = desugar.invoke(loadNode, expressionNode, newSideEffectNode2)
             Triple(newValue, newSideEffectNode3, controlNode)
         }
 
-        val (locationNode, newSideEffectNode3) = createLValueStoreNode(assignmentNode.lValue, newSideEffectNode2)
-        val storeNode = IrNode.StoreNode(locationNode, valueNode, newSideEffectNode3)
+        val storeNode = IrNode.StoreNode(locationNode, valueNode, newSideEffectNode2)
 
         return StatementReturn(storeNode, controlNode)
     }
 
     context(symbolTable: SymbolTable)
-    private fun createLValueLoadNode(lValue: AstNode.LValueNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode.DataNode, IrNode.SideEffectNode> {
-        return when (lValue) {
-            is AstNode.LValueIdentifierNode -> {
-                val value = readVariable(lValue.name.name)
-                value to lastSideEffectNode
-            }
-
-            is AstNode.LValuePointerDereferenceNode -> {
-                val (innerLoadNode, sideEffect) = createLValueLoadNode(lValue.lValue, lastSideEffectNode)
-                val loadNode = IrNode.PointerDereferenceLoadNode(innerLoadNode, sideEffect)
-                loadNode to loadNode
-            }
-
-            is AstNode.LValueFieldDereferenceNode -> {
-                val (innerLoadNode, sideEffect) = createLValueLoadNode(lValue.lValue, lastSideEffectNode)
-                val loadNode = IrNode.FieldDereferenceLoadNode(innerLoadNode, lValue.fieldName.name, sideEffect)
-                loadNode to loadNode
-            }
-
-            is AstNode.LValueFieldAccessNode -> {
-                val (innerLoadNode, sideEffect) = createLValueLoadNode(lValue.lValue, lastSideEffectNode)
-                val loadNode = IrNode.FieldAccessLoadNode(innerLoadNode, lValue.fieldName.name, sideEffect)
-                loadNode to loadNode
-            }
-
-            is AstNode.LValueArrayAccessNode -> TODO()
-        }
-    }
-
-    context(symbolTable: SymbolTable)
-    private fun createLValueStoreNode(lValue: AstNode.LValueNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode.DataNode, IrNode.SideEffectNode> {
+    private fun createLValueLocationNode(lValue: AstNode.LValueNode, lastSideEffectNode: IrNode.SideEffectNode): Pair<IrNode.DataNode, IrNode.SideEffectNode> {
         return when (lValue) {
             is AstNode.LValueIdentifierNode -> readVariable(lValue.name.name) to lastSideEffectNode
 
             is AstNode.LValuePointerDereferenceNode -> {
-                val (innerStoreNode, sideEffect) = createLValueStoreNode(lValue.lValue, lastSideEffectNode)
-                val storeNode = IrNode.PointerDereferenceStoreNode(innerStoreNode, sideEffect)
+                val (innerStoreNode, sideEffect) = createLValueLocationNode(lValue.lValue, lastSideEffectNode)
+                val storeNode = IrNode.PointerDereferenceNode(innerStoreNode, sideEffect)
                 storeNode to storeNode
             }
 
             is AstNode.LValueFieldDereferenceNode -> {
-                val (innerStoreNode, sideEffect) = createLValueStoreNode(lValue.lValue, lastSideEffectNode)
-                val storeNode = IrNode.FieldDereferenceStoreNode(innerStoreNode, lValue.fieldName.name, sideEffect)
+                val (innerStoreNode, sideEffect) = createLValueLocationNode(lValue.lValue, lastSideEffectNode)
+                val storeNode = IrNode.FieldDereferenceNode(innerStoreNode, lValue.fieldName.name, sideEffect)
                 storeNode to storeNode
             }
 
             is AstNode.LValueFieldAccessNode -> {
-                val (innerStoreNode, sideEffect) = createLValueStoreNode(lValue.lValue, lastSideEffectNode)
-                val storeNode = IrNode.FieldAccessStoreNode(innerStoreNode, lValue.fieldName.name, sideEffect)
+                val (innerStoreNode, sideEffect) = createLValueLocationNode(lValue.lValue, lastSideEffectNode)
+                val storeNode = IrNode.FieldAccessNode(innerStoreNode, lValue.fieldName.name, sideEffect)
                 storeNode to storeNode
             }
 
@@ -741,16 +706,18 @@ private class SsaConstructor(val compilerOptions: CompilerOptions, private val s
     context(symbolTable: SymbolTable)
     private fun createCallAllocNode(astNode: AstNode.CallAllocNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
         val structReferenceType = astNode.type.type as Type.StructReferenceType
-        val structType = structTypes.find { it.name == structReferenceType.structName }!!
-        val node = IrNode.AllocateStructNode(structType, lastControlNode)
-        return ExpressionReturn(node, lastSideEffectNode, node)
+        val structType = typeInformation.structTypeForStructReferenceType(structReferenceType)
+
+        val node = IrNode.AllocateStructNode(structType)
+        return ExpressionReturn(node, lastSideEffectNode, lastControlNode)
     }
 
     context(symbolTable: SymbolTable)
     private fun createFieldAccessNode(astNode: AstNode.FieldAccessNode, lastSideEffectNode: IrNode.SideEffectNode, lastControlNode: IrNode.ControlNode): ExpressionReturn {
         val (structIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode, lastControlNode)
-        val fieldAccessNode = IrNode.FieldAccessLoadNode(structIrNode, astNode.fieldName.name, newSideEffectNode)
-        return Triple(fieldAccessNode, fieldAccessNode, newControlNode)
+        val fieldAccessNode = IrNode.FieldAccessNode(structIrNode, astNode.fieldName.name, newSideEffectNode)
+        val loadNode = IrNode.LoadNode(fieldAccessNode, fieldAccessNode)
+        return Triple(loadNode, loadNode, newControlNode)
     }
 
     context(symbolTable: SymbolTable)
@@ -760,8 +727,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions, private val s
         lastControlNode: IrNode.ControlNode
     ): ExpressionReturn {
         val (structIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode, lastControlNode)
-        val fieldDerefNode = IrNode.FieldDereferenceLoadNode(structIrNode, astNode.fieldName.name, newSideEffectNode)
-        return Triple(fieldDerefNode, fieldDerefNode, newControlNode)
+        val fieldDerefNode = IrNode.FieldDereferenceNode(structIrNode, astNode.fieldName.name, newSideEffectNode)
+        val loadNode = IrNode.LoadNode(fieldDerefNode, fieldDerefNode)
+        return Triple(loadNode, loadNode, newControlNode)
     }
 
     context(symbolTable: SymbolTable)
@@ -771,8 +739,9 @@ private class SsaConstructor(val compilerOptions: CompilerOptions, private val s
         lastControlNode: IrNode.ControlNode
     ): ExpressionReturn {
         val (pointerIrNode, newSideEffectNode, newControlNode) = createIrNodeForExpression(astNode.expression, lastSideEffectNode, lastControlNode)
-        val pointerDerefNode = IrNode.PointerDereferenceLoadNode(pointerIrNode, newSideEffectNode)
-        return Triple(pointerDerefNode, pointerDerefNode, newControlNode)
+        val pointerDerefNode = IrNode.PointerDereferenceNode(pointerIrNode, newSideEffectNode)
+        val loadNode = IrNode.LoadNode(pointerDerefNode, pointerDerefNode)
+        return Triple(loadNode, loadNode, newControlNode)
     }
 
     context(symbolTable: SymbolTable)

@@ -8,6 +8,7 @@ import edu.kit.kastel.vads.compiler.lexer.Lexer
 import edu.kit.kastel.vads.compiler.parser.ParseResult
 import edu.kit.kastel.vads.compiler.parser.TokenSource
 import edu.kit.kastel.vads.compiler.parser.parse
+import edu.kit.kastel.vads.compiler.typechecker.createTypeInformation
 import org.junit.jupiter.api.DynamicTest
 import org.junit.jupiter.api.TestFactory
 import java.util.concurrent.Executors
@@ -37,8 +38,11 @@ class LowererTest {
                     with(options) {
                         val result = parse(tokenSource)
                         require(result is ParseResult.Success)
-                        val ir = buildIr(result.program)
-                        val asmIr = lowerIrToAsmIr(ir)
+                        val typeInformation = createTypeInformation(result.program)
+                        val asmIr = with(typeInformation) {
+                            val ir = buildIr(result.program)
+                            lowerIrToAsmIr(ir)
+                        }
                         val executor = Executors.newSingleThreadExecutor()
                         try {
                             val future = executor.submit<EvaluationResult> {
