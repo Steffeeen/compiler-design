@@ -24,7 +24,7 @@ private data class GraphBuilder(
     val nodeBuilder: StringBuilder = StringBuilder(),
     val edgeBuilder: StringBuilder = StringBuilder(),
     val printedNodesToNumber: MutableMap<IrNode, Int> = mutableMapOf(),
-    val createdEdges: MutableSet<Pair<Int, Int>> = mutableSetOf()
+    val createdEdges: MutableSet<Triple<Int, Int, EdgeType>> = mutableSetOf()
 ) {
     fun ensureNodeExists(node: IrNode): Int {
         printedNodesToNumber[node]?.let { return it }
@@ -37,15 +37,17 @@ private data class GraphBuilder(
 
     fun addEdge(fromId: Int, toId: Int, type: EdgeType = EdgeType.DATA) {
         if (fromId == toId) return
-        if (createdEdges.contains(fromId to toId)) return
-        createdEdges.add(fromId to toId)
+        val triple = Triple(fromId, toId, type)
+        if (createdEdges.contains(triple)) return
+        createdEdges.add(triple)
         edgeBuilder.appendIndented("$fromId -> $toId [color=\"${type.color()}\"];")
     }
 
     fun addNamedEdge(fromId: Int, toId: Int, name: String, type: EdgeType = EdgeType.DATA) {
         if (fromId == toId) return
-        if (createdEdges.contains(fromId to toId)) return
-        createdEdges.add(fromId to toId)
+        val triple = Triple(fromId, toId, type)
+        if (createdEdges.contains(triple)) return
+        createdEdges.add(triple)
         edgeBuilder.appendIndented("$fromId -> $toId [label=\"$name\", color=\"${type.color()}\"];")
     }
 }
