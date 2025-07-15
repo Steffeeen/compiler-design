@@ -65,7 +65,7 @@ sealed interface Type {
         override val kind: Kind = Kind.ARRAY
     }
 
-    data class StructType(val name: SymbolName, val fields: Map<SymbolName, Type>) : Type {
+    data class StructType(val name: SymbolName, val fields: LinkedHashMap<SymbolName, Type>) : Type {
         override fun asString(): String {
             return "struct $name { ${fields.entries.joinToString(", ") { "${it.key}: ${it.value.asString()}" }} }"
         }
