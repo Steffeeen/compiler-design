@@ -26,6 +26,11 @@ sealed interface SemanticError {
     data class FunctionAlreadyDeclared(val node: AstNode.NameNode) : SemanticError
     data class FunctionNotDeclared(val node: AstNode.NameNode) : SemanticError
     data class FunctionCallWrongNumberOfArguments(val node: AstNode.CallNode, val expected: Int, val actual: Int) : SemanticError
+    data class DuplicateStructName(val duplicate: AstNode.StructDeclarationNode, val existing: AstNode.StructDeclarationNode) : SemanticError
+    data class DuplicateFieldInStruct(val duplicate: AstNode.StructFieldDeclarationNode, val existing: AstNode.StructFieldDeclarationNode) : SemanticError
+    data class RecursiveStruct(val node: AstNode.StructDeclarationNode) : SemanticError
+    data class LargeTypeAsVariable(val node: AstNode.DeclarationNode, val type: Type) : SemanticError
+    data class LargeTypeAsParameter(val node: AstNode.ParameterNode, val type: Type) : SemanticError
 }
 
 interface SemanticAnalysis {
@@ -42,6 +47,10 @@ fun analyzeProgram(program: AstNode.ProgramNode): List<SemanticError> {
         BreakAndContinueWithinLoopAnalysis,
         IntegerLiteralRangeAnalysis,
         NoDeclarationInForIncrementAnalysis,
+        NoDuplicateStructsAnalysis,
+        NoRecursiveStructsAnalysis,
+        NoDuplicateFieldsInStructsAnalysis,
+        NoLargeTypesAsVariablesAnalysis,
         VariableStatusAnalysis,
         TypeChecking,
     )
@@ -221,6 +230,94 @@ private object BreakAndContinueWithinLoopAnalysis : SemanticAnalysis {
         }
         return errors
     }
+}
 
+private object NoDuplicateStructsAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+        val structNames = mutableSetOf<SymbolName>()
 
+        for (struct in program.structDeclarations) {
+            if (struct.name.name in structNames) {
+                val existingStruct = program.structDeclarations.first { it.name.name == struct.name.name }
+                errors += SemanticError.DuplicateStructName(struct, existingStruct)
+            } else {
+                structNames += struct.name.name
+            }
+        }
+
+        return errors
+    }
+}
+
+private object NoDuplicateFieldsInStructsAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+
+        for (struct in program.structDeclarations) {
+            val fieldNames = mutableSetOf<SymbolName>()
+            for (field in struct.fields) {
+                if (field.name.name in fieldNames) {
+                    val existingField = struct.fields.first { it.name.name == field.name.name }
+                    errors += SemanticError.DuplicateFieldInStruct(field, existingField)
+                } else {
+                    fieldNames += field.name.name
+                }
+            }
+        }
+
+        return errors
+    }
+}
+
+private object NoRecursiveStructsAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+
+        val map = program.structDeclarations.associateBy { it.name.name }
+
+        for (struct in program.structDeclarations) {
+            if (checkRecursive(struct, map, struct.name.name)) {
+                errors += SemanticError.RecursiveStruct(struct)
+            }
+        }
+
+        return errors
+    }
+
+    private fun checkRecursive(struct: AstNode.StructDeclarationNode, map: Map<SymbolName, AstNode.StructDeclarationNode>, name: SymbolName): Boolean {
+        for (field in struct.fields) {
+            if (field.type.type is Type.StructReferenceType) {
+                if (field.type.type.structName == name) {
+                    return true
+                }
+                if (checkRecursive(map[field.type.type.structName]!!, map, name)) {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+}
+
+private object NoLargeTypesAsVariablesAnalysis : SemanticAnalysis {
+    override fun analyze(program: AstNode.ProgramNode): List<SemanticError> {
+        val errors = mutableListOf<SemanticError>()
+
+        program.accept(RecursivePostorderVisitor(object : VisitorWithoutData() {
+            override fun visit(declarationNode: AstNode.DeclarationNode) {
+                if (declarationNode.type.type.isLargeType()) {
+                    errors += SemanticError.LargeTypeAsVariable(declarationNode, declarationNode.type.type)
+                }
+            }
+
+            override fun visit(parameterNode: AstNode.ParameterNode) {
+                if (parameterNode.type.type.isLargeType()) {
+                    errors += SemanticError.LargeTypeAsParameter(parameterNode, parameterNode.type.type)
+                }
+            }
+        }), Unit)
+
+        return errors
+    }
 }

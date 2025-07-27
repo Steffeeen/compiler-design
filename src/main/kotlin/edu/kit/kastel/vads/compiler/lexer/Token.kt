@@ -40,7 +40,7 @@ sealed interface Token {
         sealed interface TypeKeywordType : KeywordType
         sealed interface BuiltinFunctionType : KeywordType
 
-        object STRUCT : KeywordTypeImpl("struct")
+        object STRUCT : KeywordTypeImpl("struct"), TypeKeywordType
         object IF : KeywordTypeImpl("if")
         object ELSE : KeywordTypeImpl("else")
         object WHILE : KeywordTypeImpl("while")
@@ -54,8 +54,8 @@ sealed interface Token {
         object NULL : KeywordTypeImpl("NULL")
         object PRINT : KeywordTypeImpl("print"), BuiltinFunctionType
         object READ : KeywordTypeImpl("read"), BuiltinFunctionType
-        object ALLOC : KeywordTypeImpl("alloc")
-        object ALLOC_ARRAY : KeywordTypeImpl("alloc_array")
+        object ALLOC : KeywordTypeImpl("alloc"), BuiltinFunctionType
+        object ALLOC_ARRAY : KeywordTypeImpl("alloc_array"), BuiltinFunctionType
         object INT : KeywordTypeImpl("int"), TypeKeywordType
         object BOOL : KeywordTypeImpl("bool"), TypeKeywordType
         object VOID : KeywordTypeImpl("void")
@@ -82,6 +82,8 @@ sealed interface Token {
         object COLON : SeparatorTypeImpl(":")
         object SEMICOLON : SeparatorTypeImpl(";")
         object COMMA : SeparatorTypeImpl(",")
+        object BRACKET_OPEN : SeparatorTypeImpl("[")
+        object BRACKET_CLOSE : SeparatorTypeImpl("]")
 
         companion object {
             val entries by lazy {
@@ -138,13 +140,19 @@ sealed interface Token {
             override val ternaryAssociativity: Associativity,
         ) : TernaryOperatorType
 
+        object DEREFERENCE_OR_MUL : UnaryOperatorType, BinaryOperatorType {
+            override val value = "*"
+            override val unaryPrecedence = 14
+            override val unaryAssociativity = RIGHT
+            override val binaryPrecedence = 12
+            override val binaryAssociativity = LEFT
+        }
         object LOGICAL_NOT : UnaryOperatorTypeImpl("!", 13, RIGHT)
         object BITWISE_NOT : UnaryOperatorTypeImpl("~", 13, RIGHT)
-        object MUL : BinaryOperatorTypeImpl("*", 12, LEFT)
         object DIV : BinaryOperatorTypeImpl("/", 12, LEFT)
         object MOD : BinaryOperatorTypeImpl("%", 12, LEFT)
         object ADD : BinaryOperatorTypeImpl("+", 11, LEFT)
-        object SUB : UnaryOperatorType, BinaryOperatorType {
+        object SUB_OR_NEGATE : UnaryOperatorType, BinaryOperatorType {
             override val value = "-"
             override val unaryPrecedence = 13
             override val unaryAssociativity = RIGHT
@@ -152,6 +160,8 @@ sealed interface Token {
             override val binaryAssociativity = LEFT
         }
 
+        object FIELD_DEREFERENCE : BinaryOperatorTypeImpl("->", 15, LEFT)
+        object FIELD_ACCESS : BinaryOperatorTypeImpl(".", 15, LEFT)
         object LEFT_SHIFT : BinaryOperatorTypeImpl("<<", 10, LEFT)
         object RIGHT_SHIFT : BinaryOperatorTypeImpl(">>", 10, LEFT)
         object LESS_THAN : BinaryOperatorTypeImpl("<", 9, LEFT)

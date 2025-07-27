@@ -4,16 +4,17 @@ import edu.kit.kastel.vads.compiler.backend.ir.AsmIr
 import kotlin.math.max
 import kotlin.math.min
 
-private data class SimpleRegisterAllocation<T : Architecture>(
+private data class SimpleRegisterAllocation<T : Architecture<T>>(
     override val numberOfStackVariables: Int,
     private val allocations: Map<AsmIr.Register, AllocationForRegister<T>>,
+    override val calleeSavedRegisterReloads: List<AllocationInformation.Reload<T>>,
 ) : RegisterAllocation<T> {
     override fun get(instruction: AsmIr.Instruction): Map<AsmIr.Register, AllocationInformation<T>> {
         return instruction.usedRegisters().associateWith { allocations[it]!![instruction] }
     }
 }
 
-data class AllocationForRegister<T : Architecture>(private val map: Map<AsmIr.Instruction, AllocationInformation<T>>) {
+data class AllocationForRegister<T : Architecture<T>>(private val map: Map<AsmIr.Instruction, AllocationInformation<T>>) {
     operator fun get(instruction: AsmIr.Instruction): AllocationInformation<T> = map[instruction]!!
 }
 
@@ -44,13 +45,13 @@ private class LiveRange() {
     }
 }
 
-class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : RegisterAllocator<T> {
-    override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function, stackSlotCreator: (Int) -> StackLocation<T>): RegisterAllocation<T> {
+class GraphColoringRegisterAllocator<T : Architecture<T>>(val architecture: T) : RegisterAllocator<T> {
+    override fun allocateRegisters(availableRegisters: Set<Register<T>>, function: AsmIr.Function): RegisterAllocation<T> {
         val predecessors = calculatePredecessors(function)
         val successors = calculateSuccessors(predecessors)
 
         val availableRegistersSequence: Sequence<Location<T>> = availableRegisters.asSequence() + generateSequence(0) { it + 1 }
-            .map { stackSlotCreator(it) }
+            .map { architecture.createStackSlot(it) }
 
         return with(predecessors) {
             with(successors) {
@@ -63,7 +64,7 @@ class GraphColoringRegisterAllocator<T : Architecture>(val architecture: T) : Re
 }
 
 context(predecessors: Predecessors, successors: Successors, architecture: T)
-private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>>, function: AsmIr.Function): RegisterAllocation<T> {
+private fun <T : Architecture<T>> allocate(availableRegisters: Sequence<Location<T>>, function: AsmIr.Function): RegisterAllocation<T> {
     val instructionNumbering = numberInstructions(function.startBlock)
 
     val interferenceGraph = buildInterferenceGraph(instructionNumbering, function.returnBlock)
@@ -71,13 +72,19 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
     val allocations = mutableMapOf<AsmIr.Register, MutableMap<AsmIr.Instruction, AllocationInformation<T>>>()
     val currentAllocations = mutableMapOf<AsmIr.Register, Location<T>>()
 
-    val parameterHardwareRegisters = architecture.getArgumentRegisters()
-    require(function.parameters.size <= parameterHardwareRegisters.size) { TODO("Implement stack arguments in register allocator") }
+    val parameterLocations = (architecture.getArgumentRegisters().asSequence() + generateSequence(0) { it + 1 }.map { architecture.createArgumentLocation(it) })
     for ((index, parameterRegister) in function.parameters.withIndex()) {
-        @Suppress("UNCHECKED_CAST")
-        currentAllocations[parameterRegister] = parameterHardwareRegisters[index] as Register<T>
+        currentAllocations[parameterRegister] = parameterLocations.elementAt(index)
         allocations[parameterRegister] = mutableMapOf()
     }
+
+    // Create synthetic AsmIr registers that represent the callee-saved registers. These use the indices -1, -2, -3, ...
+    val syntheticAsmIrRegistersForCalleeSavedRegisters = architecture.getCalleeSavedRegisters().mapIndexed { index, register -> register to AsmIr.Register(-index - 1) }
+    for ((register, asmRegister) in syntheticAsmIrRegistersForCalleeSavedRegisters) {
+        currentAllocations[asmRegister] = register
+        allocations[asmRegister] = mutableMapOf()
+    }
+    val syntheticAsmIrRegisters = syntheticAsmIrRegistersForCalleeSavedRegisters.map { it.second }
 
     for (instruction in instructionNumbering.entries.sortedBy { it.value }.map { it.key }) {
         fun handleOperand(instruction: AsmIr.Instruction, operand: AsmIr.Operand) {
@@ -91,7 +98,8 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
                 return
             }
 
-            val interfering = (interferenceGraph[operand] ?: setOf()).mapNotNull { currentAllocations[it] }
+            val interferingFromGraph = interferenceGraph[operand] ?: setOf()
+            val interfering = (interferingFromGraph + syntheticAsmIrRegisters).mapNotNull { currentAllocations[it] }
             val available = availableRegisters - interfering
 
             val locationToUse = available.first()
@@ -112,7 +120,7 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
             }
 
             // No register available, we need to spill
-            require(locationToUse is StackLocation<T>) // should be a stack location
+            require(locationToUse is SpillLocation<T>) // should be a stack location
 
             // FIXME: Implement a proper heuristic to choose which register to spill
             // for now, choose a register to spill randomly
@@ -120,8 +128,15 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
 
             val allocationInformation = if (operand in currentAllocations) {
                 val reloadLocation = currentAllocations[operand]!!
-                require(reloadLocation is StackLocation<T>) { "should be a stack location" }
-                AllocationInformation.SpillAndReload(registerToSpill as Register<T>, locationToUse, reloadLocation)
+                require(reloadLocation is SpillLocation<T>) { "should be a stack location" }
+                val finalLocationToUse = if (locationToUse == reloadLocation) {
+                    // We can't simultaneously spill and reload to/from the same location, so we need to find a different location to spill to
+                    (available - reloadLocation).first()
+                } else {
+                    locationToUse
+                }
+                require(finalLocationToUse is SpillLocation<T>) { "should be a stack location" }
+                AllocationInformation.SpillAndReload(registerToSpill as Register<T>, finalLocationToUse, reloadLocation)
             } else {
                 AllocationInformation.Spill(registerToSpill as Register<T>, locationToUse)
             }
@@ -163,11 +178,23 @@ private fun <T : Architecture> allocate(availableRegisters: Sequence<Location<T>
         }
     }
 
+    // Restore the callee-saved registers at the end of the function
+    val calleeSavedRegisterReloads = syntheticAsmIrRegistersForCalleeSavedRegisters.mapNotNull { (register, asmRegister) ->
+        if (currentAllocations[asmRegister] == register) {
+            // The callee-saved register is still in the same location, no need to reload it
+            null
+        } else {
+            val reloadLocation = currentAllocations[asmRegister]!!
+            require(reloadLocation is SpillLocation<T>) { "should be a stack location" }
+            AllocationInformation.Reload(register, reloadLocation)
+        }
+    }
+
     val maxSpillIndex1 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.Spill<T>>().maxOfOrNull { it.spillLocation.index }
     val maxSpillIndex2 = allocations.values.flatMap { it.values }.filterIsInstance<AllocationInformation.SpillAndReload<T>>().maxOfOrNull { it.spillLocation.index }
     val numberOfStackVariables = maxOf(maxSpillIndex1 ?: 0, maxSpillIndex2 ?: 0) + 1 // +1 because we start counting from 0
     val finalAllocations = allocations.mapValues { AllocationForRegister(it.value) }
-    return SimpleRegisterAllocation(numberOfStackVariables, finalAllocations)
+    return SimpleRegisterAllocation(numberOfStackVariables, finalAllocations, calleeSavedRegisterReloads)
 }
 
 context(predecessors: Predecessors, successors: Successors)
@@ -214,55 +241,53 @@ private fun calculateLiveness(returnBlock: AsmIr.BasicBlock): Map<AsmIr.Instruct
         outLive[block] = block.successors().flatMap { inLive[it] ?: emptySet() }.toSet()
         val liveInCurrentBlock = outLive[block]!!.toMutableSet()
 
-        fun recordDefinition(register: AsmIr.Register, killed: MutableSet<AsmIr.Register>) {
-            killed.add(register)
-        }
-
-        fun recordUse(operand: AsmIr.Operand) {
-            if (operand is AsmIr.Register) {
-                liveInCurrentBlock.add(operand)
-            }
-        }
-
         for (instruction in block.instructions.reversed()) {
-            val killed = mutableSetOf<AsmIr.Register>()
+            val kill = mutableSetOf<AsmIr.Register>()
+            val gen = mutableSetOf<AsmIr.Register>()
+            val killAfterInstruction = mutableSetOf<AsmIr.Register>()
+
+            fun recordUse(operand: AsmIr.Operand) {
+                if (operand is AsmIr.Register) {
+                    gen.add(operand)
+                }
+            }
+
             when (instruction) {
                 is AsmIr.BinaryOperation -> {
                     recordUse(instruction.leftSource)
                     recordUse(instruction.rightSource)
 
-                    if (instruction.operation.isCommutative) {
+                    if (instruction.operation.isCommutative && instruction.destination != instruction.leftSource && instruction.destination != instruction.rightSource) {
                         // If the operation is commutative, we can have the destination and the sources not interfere as we can swap operands and can thus avoid the situation
                         // where the destination and the right source are the same. If the destination is the same as the right source and the operation is not commutative,
                         // we would overwrite the right source by moving the left source into the destination. We have to do that move to transform the three-address AsmIr
-                        // into two-address assembly like X86.
-                        liveInCurrentBlock.remove(instruction.destination)
+                        // into two-address assembly like X86. We thus remove the destination from the live variables immediately.
+                        kill.add(instruction.destination)
                     } else {
-                        // If the operation is not commutative, the destination and all the sources have to interfere to avoid the situation described above where the destination
-                        // is the same as the right source.
-                        killed.add(instruction.destination)
+                        // The destination has to interfere with both sources. We thus remove the destination from the live variables only after writing the interfering registers
+                        // for this instruction.
+                        killAfterInstruction.add(instruction.destination)
                     }
-                    recordDefinition(instruction.destination, killed)
                 }
 
                 is AsmIr.UnaryOperation -> {
                     recordUse(instruction.source)
-                    recordDefinition(instruction.destination, killed)
+                    kill.add(instruction.destination)
                 }
 
                 is AsmIr.Move -> {
                     recordUse(instruction.source)
-                    recordDefinition(instruction.destination, killed)
+                    kill.add(instruction.destination)
                 }
 
                 is AsmIr.Call -> {
                     instruction.arguments.forEach { recordUse(it) }
-                    instruction.destination?.let { recordDefinition(it, killed) }
+                    instruction.destination?.let { kill.add(it) }
                 }
 
                 is AsmIr.CallBuiltin -> {
                     instruction.arguments.forEach { recordUse(it) }
-                    instruction.destination?.let { recordDefinition(it, killed) }
+                    instruction.destination?.let { kill.add(it) }
                 }
 
                 is AsmIr.Return -> recordUse(instruction.value)
@@ -270,8 +295,9 @@ private fun calculateLiveness(returnBlock: AsmIr.BasicBlock): Map<AsmIr.Instruct
                 is AsmIr.Jump -> {}
             }
 
+            liveInCurrentBlock.removeAll(kill)
+            liveInCurrentBlock.addAll(gen)
             liveVariables[instruction] = liveInCurrentBlock.toSet()
-            liveInCurrentBlock.removeAll(killed)
         }
 
         inLive[block] = liveInCurrentBlock

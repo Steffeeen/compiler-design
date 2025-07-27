@@ -14,7 +14,6 @@ import edu.kit.kastel.vads.compiler.backend.lowerIrToAsmIr
 import edu.kit.kastel.vads.compiler.backend.x86.X86Assembler
 import edu.kit.kastel.vads.compiler.backend.x86.X86Assembly
 import edu.kit.kastel.vads.compiler.backend.x86.X86CodeGenerator
-import edu.kit.kastel.vads.compiler.backend.x86.X86StackRegister
 import edu.kit.kastel.vads.compiler.ir.buildIr
 import edu.kit.kastel.vads.compiler.ir.util.toDotVisualization
 import edu.kit.kastel.vads.compiler.lexer.Lexer
@@ -86,8 +85,7 @@ private fun CompilerOptions.runCompiler() {
     println(asmIrString)
 
     val registerAllocator = GraphColoringRegisterAllocator(X86Architecture)
-    val registerAllocations =
-        asmIr.functions.associateWith { registerAllocator.allocateRegisters(X86Architecture.getAvailableRegisters(), it) { index -> X86StackRegister(index) } }
+    val registerAllocations = asmIr.functions.associateWith { registerAllocator.allocateRegisters(X86Architecture.getAvailableRegisters(), it) }
 
     val assembly = X86CodeGenerator().generateCode(asmIr, registerAllocations)
 

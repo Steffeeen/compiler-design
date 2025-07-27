@@ -26,6 +26,11 @@ sealed interface AstNode {
         override val children: List<AstNode> = listOf()
     }
 
+    data class NullLiteralNode(override val span: Span) : ExpressionNode {
+        override val children: List<AstNode> = listOf()
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
     data class AssignmentNode(val lValue: LValueNode, val operator: Token.OperatorType.AssignOperatorType, val expression: ExpressionNode) : SimpleNode {
         override val span get() = lValue.span.merge(expression.span)
         override val children: List<AstNode> = listOf(lValue, expression)
@@ -35,6 +40,28 @@ sealed interface AstNode {
     data class BinaryOperationNode(val left: ExpressionNode, val right: ExpressionNode, val operatorType: Token.OperatorType.BinaryOperatorType) : ExpressionNode {
         override val span get() = left.span.merge(right.span)
         override val children: List<AstNode> = listOf(left, right)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class PointerDereferenceNode(val expression: ExpressionNode, override val span: Span) : ExpressionNode {
+        override val children: List<AstNode> = listOf(expression)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class FieldAccessNode(val expression: ExpressionNode, val fieldName: NameNode) : ExpressionNode {
+        override val span: Span get() = expression.span.merge(fieldName.span)
+        override val children: List<AstNode> = listOf(expression, fieldName)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class FieldDereferenceNode(val expression: ExpressionNode, val fieldName: NameNode) : ExpressionNode {
+        override val span: Span get() = expression.span.merge(fieldName.span)
+        override val children: List<AstNode> = listOf(expression, fieldName)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class ArrayAccessNode(val expression: ExpressionNode, val index: ExpressionNode, override val span: Span) : ExpressionNode {
+        override val children: List<AstNode> = listOf(expression, index)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
@@ -57,7 +84,7 @@ sealed interface AstNode {
 
     data class FunctionNode(val returnType: TypeNode, val parameters: List<ParameterNode>, val name: NameNode, val body: BlockNode) : AstNode {
         override val span get() = Span.SimpleSpan(returnType.span.start, body.span.end)
-        override val children: List<AstNode> = listOf(returnType, name, body)
+        override val children: List<AstNode> = listOf(returnType) + parameters + name + body
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
@@ -99,6 +126,28 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
+    data class LValuePointerDereferenceNode(val lValue: LValueNode, override val span: Span) : LValueNode {
+        override val children: List<AstNode> = listOf(lValue)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class LValueFieldAccessNode(val lValue: LValueNode, val fieldName: NameNode) : LValueNode {
+        override val span: Span get() = lValue.span.merge(fieldName.span)
+        override val children: List<AstNode> = listOf(lValue, fieldName)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class LValueFieldDereferenceNode(val lValue: LValueNode, val fieldName: NameNode) : LValueNode {
+        override val span: Span get() = lValue.span.merge(fieldName.span)
+        override val children: List<AstNode> = listOf(lValue, fieldName)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class LValueArrayAccessNode(val lValue: LValueNode, val index: ExpressionNode, override val span: Span) : LValueNode {
+        override val children: List<AstNode> = listOf(lValue, index)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
     data class UnaryOperationNode(val expression: ExpressionNode, val operator: Token.OperatorType.UnaryOperatorType, override val span: Span) : ExpressionNode {
         override val children: List<AstNode> = listOf(expression)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
@@ -109,7 +158,7 @@ sealed interface AstNode {
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
-    data class ProgramNode(val topLevelFunctions: List<FunctionNode>) : AstNode {
+    data class ProgramNode(val topLevelFunctions: List<FunctionNode>, val structDeclarations: List<StructDeclarationNode>) : AstNode {
         override val span get() = span()
         override val children: List<AstNode> = topLevelFunctions
         private fun span(): Span {
@@ -118,6 +167,17 @@ sealed interface AstNode {
             return Span.SimpleSpan(first.span.start, last.span.end)
         }
 
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class StructDeclarationNode(val name: NameNode, val fields: List<StructFieldDeclarationNode>, override val span: Span) : AstNode {
+        override val children: List<AstNode> = listOf(name) + fields
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class StructFieldDeclarationNode(val type: TypeNode, val name: NameNode) : AstNode {
+        override val span: Span get() = type.span.merge(name.span)
+        override val children: List<AstNode> = listOf(type, name)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 
@@ -179,6 +239,18 @@ sealed interface AstNode {
 
     data class CallBuiltinNode(val keyword: Token.KeywordType.BuiltinFunctionType, override val arguments: List<ExpressionNode>, override val span: Span) : CallNode {
         override val children: List<AstNode> = arguments
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class CallAllocNode(val type: TypeNode, override val span: Span) : CallNode {
+        override val arguments: List<ExpressionNode> = listOf()
+        override val children: List<AstNode> = listOf(type)
+        override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
+    }
+
+    data class CallAllocArrayNode(val type: TypeNode, val size: ExpressionNode, override val span: Span) : CallNode {
+        override val arguments: List<ExpressionNode> = listOf(size)
+        override val children: List<AstNode> = listOf(type, size)
         override fun <T, R> accept(visitor: Visitor<T, R>, data: T): R = visitor.visit(this, data)
     }
 }

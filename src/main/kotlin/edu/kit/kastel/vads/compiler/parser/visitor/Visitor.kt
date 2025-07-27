@@ -26,4 +26,17 @@ interface Visitor<T, R> {
     fun visit(callNormalNode: CallNormalNode, data: T): R
     fun visit(callBuiltinNode: CallBuiltinNode, data: T): R
     fun visit(parameterNode: ParameterNode, data: T): R
+    fun visit(nullLiteralNode: NullLiteralNode, data: T): R
+    fun visit(pointerDereferenceNode: PointerDereferenceNode, data: T): R
+    fun visit(fieldAccessNode: FieldAccessNode, data: T): R
+    fun visit(fieldDereferenceNode: FieldDereferenceNode, data: T): R
+    fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, data: T): R
+    fun visit(lValueFieldAccessNode: LValueFieldAccessNode, data: T): R
+    fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, data: T): R
+    fun visit(lValueArrayAccessNode: LValueArrayAccessNode, data: T): R
+    fun visit(structDeclarationNode: StructDeclarationNode, data: T): R
+    fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, data: T): R
+    fun visit(callAllocNode: CallAllocNode, data: T): R
+    fun visit(callAllocArrayNode: CallAllocArrayNode, data: T): R
+    fun visit(arrayAccessNode: ArrayAccessNode, data: T): R
 }

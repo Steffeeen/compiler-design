@@ -31,6 +31,19 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
     override fun visit(callNormalNode: CallNormalNode, data: T): R = visitInOrderAndAccumulate(callNormalNode, data)
     override fun visit(callBuiltinNode: CallBuiltinNode, data: T): R = visitInOrderAndAccumulate(callBuiltinNode, data)
     override fun visit(parameterNode: ParameterNode, data: T): R = visitInOrderAndAccumulate(parameterNode, data)
+    override fun visit(nullLiteralNode: NullLiteralNode, data: T): R = visitInOrderAndAccumulate(nullLiteralNode, data)
+    override fun visit(pointerDereferenceNode: PointerDereferenceNode, data: T): R = visitInOrderAndAccumulate(pointerDereferenceNode, data)
+    override fun visit(fieldAccessNode: FieldAccessNode, data: T): R = visitInOrderAndAccumulate(fieldAccessNode, data)
+    override fun visit(fieldDereferenceNode: FieldDereferenceNode, data: T): R = visitInOrderAndAccumulate(fieldDereferenceNode, data)
+    override fun visit(lValuePointerDereferenceNode: LValuePointerDereferenceNode, data: T): R = visitInOrderAndAccumulate(lValuePointerDereferenceNode, data)
+    override fun visit(lValueFieldAccessNode: LValueFieldAccessNode, data: T): R = visitInOrderAndAccumulate(lValueFieldAccessNode, data)
+    override fun visit(lValueFieldDereferenceNode: LValueFieldDereferenceNode, data: T): R = visitInOrderAndAccumulate(lValueFieldDereferenceNode, data)
+    override fun visit(lValueArrayAccessNode: LValueArrayAccessNode, data: T): R = visitInOrderAndAccumulate(lValueArrayAccessNode, data)
+    override fun visit(structDeclarationNode: StructDeclarationNode, data: T): R = visitInOrderAndAccumulate(structDeclarationNode, data)
+    override fun visit(structFieldDeclarationNode: StructFieldDeclarationNode, data: T): R = visitInOrderAndAccumulate(structFieldDeclarationNode, data)
+    override fun visit(callAllocNode: CallAllocNode, data: T): R = visitInOrderAndAccumulate(callAllocNode, data)
+    override fun visit(callAllocArrayNode: CallAllocArrayNode, data: T): R = visitInOrderAndAccumulate(callAllocArrayNode, data)
+    override fun visit(arrayAccessNode: ArrayAccessNode, data: T): R = visitInOrderAndAccumulate(arrayAccessNode, data)
 
     private fun visitInOrderAndAccumulate(currentNode: AstNode, data: T): R {
         val nodes = currentNode.children
@@ -72,6 +85,19 @@ open class RecursivePostorderVisitor<T, R>(private val visitor: Visitor<T, R>) :
             is CallNormalNode -> visitor.visit(node, accumulatedData)
             is CallBuiltinNode -> visitor.visit(node, accumulatedData)
             is ParameterNode -> visitor.visit(node, accumulatedData)
+            is NullLiteralNode -> visitor.visit(node, accumulatedData)
+            is PointerDereferenceNode -> visitor.visit(node, accumulatedData)
+            is FieldAccessNode -> visitor.visit(node, accumulatedData)
+            is FieldDereferenceNode -> visitor.visit(node, accumulatedData)
+            is LValuePointerDereferenceNode -> visitor.visit(node, accumulatedData)
+            is LValueFieldAccessNode -> visitor.visit(node, accumulatedData)
+            is LValueFieldDereferenceNode -> visitor.visit(node, accumulatedData)
+            is LValueArrayAccessNode -> visitor.visit(node, accumulatedData)
+            is StructDeclarationNode -> visitor.visit(node, accumulatedData)
+            is StructFieldDeclarationNode -> visitor.visit(node, accumulatedData)
+            is CallAllocNode -> visitor.visit(node, accumulatedData)
+            is CallAllocArrayNode -> visitor.visit(node, accumulatedData)
+            is ArrayAccessNode -> visitor.visit(node, accumulatedData)
         }
     }
 

@@ -33,6 +33,19 @@ private fun printNode(node: AstNode, depth: Int): String {
         is CallBuiltinNode -> printCallBuiltinNode(node, depth)
         is CallNormalNode -> printCallNormalNode(node, depth)
         is ParameterNode -> printParameterNode(node, depth)
+        is FieldAccessNode -> printFieldAccessNode(node, depth)
+        is FieldDereferenceNode -> printFieldDereferenceNode(node, depth)
+        is NullLiteralNode -> printNullNode(node, depth)
+        is PointerDereferenceNode -> printPointerDereferenceNode(node, depth)
+        is LValueArrayAccessNode -> printLValueArrayAccessNode(node, depth)
+        is LValueFieldAccessNode -> printLValueFieldAccessNode(node, depth)
+        is LValueFieldDereferenceNode -> printLValueFieldDereferenceNode(node, depth)
+        is LValuePointerDereferenceNode -> printLValuePointerDereferenceNode(node, depth)
+        is StructDeclarationNode -> printStructDeclarationNode(node, depth)
+        is StructFieldDeclarationNode -> printStructFieldDeclarationNode(node, depth)
+        is CallAllocArrayNode -> printCallAllocArrayNode(node, depth)
+        is CallAllocNode -> printCallAllocNode(node, depth)
+        is ArrayAccessNode -> printArrayAccessNode(node, depth)
     }
 }
 
@@ -161,10 +174,83 @@ private fun printParameterNode(node: ParameterNode, depth: Int): String {
     return "${printNodeNameAndSpan(node, depth)} ${node.name.name.asString()}: ${node.type.type.asString()}"
 }
 
+private fun printFieldAccessNode(node: FieldAccessNode, depth: Int): String {
+    val expression = printNode(node.expression, depth + INDENT)
+    val fieldName = printNameNode(node.fieldName, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$expression\n$fieldName"
+}
+
+private fun printFieldDereferenceNode(node: FieldDereferenceNode, depth: Int): String {
+    val expression = printNode(node.expression, depth + INDENT)
+    val fieldName = printNameNode(node.fieldName, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$expression\n$fieldName"
+}
+
+private fun printNullNode(node: NullLiteralNode, depth: Int): String {
+    return printNodeNameAndSpan(node, depth)
+}
+
+private fun printPointerDereferenceNode(node: PointerDereferenceNode, depth: Int): String {
+    val expression = printNode(node.expression, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$expression"
+}
+
+private fun printLValueArrayAccessNode(node: LValueArrayAccessNode, depth: Int): String {
+    val lValue = printNode(node.lValue, depth + INDENT)
+    val index = printNode(node.index, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$lValue\n$index"
+}
+
+private fun printLValueFieldAccessNode(node: LValueFieldAccessNode, depth: Int): String {
+    val lValue = printNode(node.lValue, depth + INDENT)
+    val fieldName = printNameNode(node.fieldName, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$lValue\n$fieldName"
+}
+
+private fun printLValueFieldDereferenceNode(node: LValueFieldDereferenceNode, depth: Int): String {
+    val lValue = printNode(node.lValue, depth + INDENT)
+    val fieldName = printNameNode(node.fieldName, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$lValue\n$fieldName"
+}
+
+private fun printLValuePointerDereferenceNode(node: LValuePointerDereferenceNode, depth: Int): String {
+    val lValue = printNode(node.lValue, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$lValue"
+}
+
+private fun printStructDeclarationNode(node: StructDeclarationNode, depth: Int): String {
+    val name = printNameNode(node.name, depth + INDENT)
+    val fields = node.fields.joinToString("\n") { printStructFieldDeclarationNode(it, depth + INDENT) }
+    return "${printNodeNameAndSpan(node, depth)}\n$name\n$fields"
+}
+
+private fun printStructFieldDeclarationNode(node: StructFieldDeclarationNode, depth: Int): String {
+    val type = printTypeNode(node.type, depth + INDENT)
+    val name = printNameNode(node.name, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$type\n$name"
+}
+
 private fun printNodeNameAndSpan(node: AstNode, depth: Int): String {
     return " ".repeat(depth) + "${node::class.simpleName} ${printSpan(node.span)}"
 }
 
 private fun printSpan(span: Span): String {
     return "(${span.start.line}, ${span.start.column}) - (${span.end.line}, ${span.end.column})"
+}
+
+private fun printCallAllocArrayNode(node: CallAllocArrayNode, depth: Int): String {
+    val type = printTypeNode(node.type, depth + INDENT)
+    val size = printNode(node.size, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)} alloc_array\n$type\n$size"
+}
+
+private fun printCallAllocNode(node: CallAllocNode, depth: Int): String {
+    val type = printTypeNode(node.type, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)} alloc\n$type"
+}
+
+private fun printArrayAccessNode(node: ArrayAccessNode, depth: Int): String {
+    val array = printNode(node.expression, depth + INDENT)
+    val index = printNode(node.index, depth + INDENT)
+    return "${printNodeNameAndSpan(node, depth)}\n$array\n$index"
 }

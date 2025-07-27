@@ -115,21 +115,49 @@ private class VariableStatusVisitor : VisitorWithoutData() {
     }
 
     override fun visit(assignmentNode: AstNode.AssignmentNode) {
-        require(assignmentNode.lValue is AstNode.LValueIdentifierNode) { TODO("Currently only identifier lValues are supported") }
-
         assignmentNode.expression.accept(this, Unit)
 
-        if (assignmentNode.operator == Token.OperatorType.ASSIGN) {
-            checkDeclared(assignmentNode.lValue.name)
-        } else {
-            checkInitialized(assignmentNode.lValue.name)
-        }
+        checkLValue(assignmentNode.lValue, assignmentNode.operator != Token.OperatorType.ASSIGN)
+    }
 
-        updateStatus(assignmentNode.lValue.name, VariableStatus.INITIALIZED)
+    private fun checkLValue(lValue: AstNode.LValueNode, needsToBeInitialized: Boolean) {
+        val check = if (needsToBeInitialized) ::checkInitialized else ::checkDeclared
+        when (lValue) {
+            is AstNode.LValueArrayAccessNode -> {
+                lValue.index.accept(this, Unit)
+                checkLValue(lValue.lValue, needsToBeInitialized)
+            }
+
+            is AstNode.LValueIdentifierNode -> {
+                check(lValue.name)
+                updateStatus(lValue.name, VariableStatus.INITIALIZED)
+            }
+
+            is AstNode.LValueFieldAccessNode -> checkLValue(lValue.lValue, needsToBeInitialized)
+            is AstNode.LValueFieldDereferenceNode -> checkLValue(lValue.lValue, needsToBeInitialized)
+            is AstNode.LValuePointerDereferenceNode -> checkLValue(lValue.lValue, true)
+        }
     }
 
     override fun visit(identifierExpressionNode: AstNode.IdentifierExpressionNode) {
         checkInitialized(identifierExpressionNode.name)
+    }
+
+    override fun visit(pointerDereferenceNode: AstNode.PointerDereferenceNode) {
+        pointerDereferenceNode.expression.accept(this, Unit)
+    }
+
+    override fun visit(fieldAccessNode: AstNode.FieldAccessNode) {
+        fieldAccessNode.expression.accept(this, Unit)
+    }
+
+    override fun visit(fieldDereferenceNode: AstNode.FieldDereferenceNode) {
+        fieldDereferenceNode.expression.accept(this, Unit)
+    }
+
+    override fun visit(arrayAccessNode: AstNode.ArrayAccessNode) {
+        arrayAccessNode.expression.accept(this, Unit)
+        arrayAccessNode.index.accept(this, Unit)
     }
 
     override fun visit(ifNode: AstNode.IfNode) {
