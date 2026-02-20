@@ -1,88 +1,83 @@
-# Starter Code: Java
+# Compiler Design
 
-This project contains starter code written in Java 24.
-It contains:
+This project contains my compiler for the [Compiler Design](https://symbolaris.com/course/compiler.html) labs at KIT in
+the summer term of 2025.
 
-- A lexer for L1
-- A parser for L1
-- Semantic analysis for L1
-- SSA translation and IR
-- Code generation for an abstract assembly
+My code is originally based on
+the [Java starter code](https://github.com/LS-Lab/Compilers-course-code-template/tree/java)
+provided by the course.
+However, I have rewritten nearly everything from scratch in switching to Kotlin.
+Only the code for the [Lexer](./src/main/kotlin/edu/kit/kastel/vads/compiler/lexer/Lexer.kt) is still mostly a 1:1
+translation from the Java version.
 
-Furthermore, the starter code also provides working `build.sh` and `run.sh` files.
+## Compiled Language
 
-## Code Overview
+The language we compile is a simple, C-like language.
+It gained more features with each new lab ([L1](https://logic.kastel.kit.edu/teaching/compiler/Lab1.pdf), [L2](https://logic.kastel.kit.edu/teaching/compiler/Lab2.pdf), [L3](https://logic.kastel.kit.edu/teaching/compiler/Lab3.pdf), [L4](https://logic.kastel.kit.edu/teaching/compiler/Lab4.pdf)).
 
-The starter code is meant to spare you some initial work on things that are not covered
-by the lecture at the time of the first lab.
-You will most likely need to touch large parts of the existing code sooner or later,
-so we recommend going through it for a basic understanding of what is going on.
+The core features include:
 
-Remember that you are free to modify any code.
+- Integer variables and arithmetic
+- Control flow (if, while)
+- Functions (with parameters and return values)
+- Arrays
+- Structs
+- Pointers
+- Dynamic memory allocation
 
-### Lexer & Tokens
+## Compiler Overview
 
-The lexer lazily produces tokens from an input string.
-Invalid input parts will generate `ErrorToken`s.
+The compiler implements lexing, parsing, semantic analysis, SSA translation and code generation.
+The only direct dependency it uses is [Clikt](https://ajalt.github.io/clikt/) for command-line parsing.
+Additionally, it uses [gcc](https://gcc.gnu.org/) on Linux and [nasm](https://www.nasm.us/) & [clang](https://clang.llvm.org/) on macOS for assembling and linking the generated code.
 
-### Parser & AST
+### Lexing & Parsing
 
-The parser is a handwritten, recursive-descent parser.
-You can choose other technologies (e.g., ANTLR), but expanding this parser as needed
-might be a good exercise to deepen your understanding.
-
-The parser does not implement any kind of error recovery.
-Instead, it just throws an exception as soon as the first problem is encountered.
-You can implement error recovery, but it is not mandatory.
+The compiler uses a handwritten [lexer](./src/main/kotlin/edu/kit/kastel/vads/compiler/lexer/Lexer.kt) and recursive-descent [parser](./src/main/kotlin/edu/kit/kastel/vads/compiler/parser/Parser.kt).
 
 ### Semantic Analysis
 
-The semantic analysis in Lab 1 is just very basic.
-You will need to expand it in future labs.
-Similar to the parser, error handling is only very basic.
+The semantic analysis checks for various semantic errors in the AST.
+It checks the following:
 
-### SSA translation & IR
+- `MainFunctionAnalysis`: The program contains a `main` function with the correct signature.
+- `FunctionDefinitionAnalysis`: No function is defined more than once.
+- `FunctionCallAnalysis`: All function calls refer to existing functions and have the correct number of arguments.
+- `ReturnAnalysis`: All paths in a function with a non-void return type return a value.
+- `BreakAndContinueWithinLoopAnalysis`: `break` and `continue` statements are only used within loops.
+- `IntegerLiteralRangeAnalysis`: All integer literals are within the range of 32-bit unsigned integers.
+- `NoDeclarationInForIncrementAnalysis`: No variable declarations are allowed in the increment part of a for loop.
+- `NoDuplicateStructsAnalysis`: No struct is defined more than once.
+- `NoRecursiveStructsAnalysis`: Structs cannot be recursive (i.e., a struct cannot contain itself directly or indirectly).
+- `NoDuplicateFieldsInStructsAnalysis`: No struct can contain multiple fields with the same name.
+- `NoLargeTypesAsVariablesAnalysis`: Variables cannot have large types (i.e., arrays or structs) as their type.
+- `VariableStatusAnalysis`: All variables are declared before they are used, and no variable is declared more than once in the same scope.
+- `TypeChecking`: All expressions have the correct types (e.g., you cannot add an integer and a pointer, or call a non-function).
 
-The SSA IR is inspired by [libFirm](https://libfirm.github.io/) and [Sea-of-Nodes](https://github.com/SeaOfNodes/).
-It might be helpful to study these to get a better understanding of what is going on.
-The implementation also showcases how SSA translation can directly apply optimizations.
+### IR
 
-In the first lab, you don't need to understand SSA in full detail.
-However, register allocation on chordal graphs depends on SSA.
-For Lab 1, register allocation can also be done just using the AST,
-but that means you'll likely have to rewrite more code in future labs.
-It can still make sense to start with simple, naive implementations to have something working early on.
+The IR is in SSA form and inspired by [libFirm](https://libfirm.github.io/) and [Sea of Nodes](https://github.com/SeaOfNodes/).
+Currently, no optimizations are implemented, but the SSA translation already applies some optimizations (e.g., constant propagation and dead code elimination).
+This IR is then used lowered to the AsmIR, which is a simple, abstract assembly language.
 
-### Code generation
+### Code Generation
 
-This is more or less just a placeholder.
-You most likely just want to fully replace it with your register allocation and instruction selection.
+The code generation takes the AsmIR and generates assembly code.
+Currently, only x86-64 assembly is supported, but the code generation is structured in a way that it should be easy to add support for other architectures (e.g., ARM).
+For register allocation a graph coloring approach is used.
 
-## Debugging Utilities
+## Compiler Options
 
-There is a chance something won't work on the first try.
-To figure out the cause, we provide utilities that ease debugging.
+The compiler supports a few options for debugging and testing purposes.
+These options can be passed as command-line arguments or set via environment variables.
 
-- `edu.kit.kastel.vads.compiler.parser.Printer` allows printing the AST.
-  As it inserts many parentheses, it can be helpful when debugging precedence problems.
-- `edu.kit.kastel.vads.compiler.ir.util.GraphVizPrinter` can generate output in the DOT format.
-  There are online tools (e.g., https://magjac.com/graphviz-visual-editor/) that can visualize that output.
-  It allows debugging anything related to the IR.
+| Option             | Env Variable     | Description                                                  |
+|--------------------|------------------|--------------------------------------------------------------|
+| `--print-ast`      | `PRINT_AST`      | Print the AST to stdout.                                     |
+| `--print-ir`       | `PRINT_IR`       | Print the IR to a `graph.dot` file in the working directory. |
+| `--overwrite-ir`   | `OVERWRITE_IR`   | Overwrite the IR file if it already exists.                  |
+| `--print-assembly` | `PRINT_ASSEMBLY` | Print the generated assembly.                                |
 
-We also try to keep track of source positions as much as possible through the compiler.
-You can get rid of all that, but it can be helpful to track down where something comes from.
+## License
 
-## Miscellaneous
-
-### Nullability
-
-This project uses [jspecify](https://jspecify.dev/).
-The `module-info.java` is annotated with `@NullMarked`,
-meaning uses of `null` must be annotated, and not-null is assumed otherwise.
-
-### Gradle
-
-This project provides the wrapper for Gradle 8.14.
-Additionally, the `application` plugin is used to easily specify the main class and build ready-to-use executables.
-To ease setup ceremony,
-the `foojay-resolver-convention` is used to automatically download a JDK matching the toolchain configuration.
+MIT License. See [LICENSE](LICENSE) for details.

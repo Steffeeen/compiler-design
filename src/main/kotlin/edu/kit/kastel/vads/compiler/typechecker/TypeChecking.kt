@@ -24,7 +24,8 @@ object TypeChecking : SemanticAnalysis {
 
         val functionTypes =
             program.topLevelFunctions.associate { (returnType, parameters, name) -> name.name to Type.FunctionType(returnType.type, parameters.map { it.type.type }) }
-        val structTypes = program.structDeclarations.associate { (name, fields) -> name.name to Type.StructType(name.name, fields.associate { it.name.name to it.type.type }) }
+        val structTypes =
+            program.structDeclarations.associate { (name, fields) -> name.name to Type.StructType(name.name, fields.associateTo(linkedMapOf()) { it.name.name to it.type.type }) }
 
         val visitor = TypeCheckingVisitor(functionTypes, structTypes)
         program.accept(visitor, Unit)

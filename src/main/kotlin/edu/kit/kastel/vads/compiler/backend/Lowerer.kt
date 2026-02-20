@@ -167,6 +167,11 @@ private class Lowerer(private val irGraph: IrGraph) {
             }
 
             IrNode.StartNode -> {}
+            is IrNode.StoreNode -> TODO()
+            is IrNode.FieldAccessNode -> TODO()
+            is IrNode.FieldDereferenceNode -> TODO()
+            is IrNode.LoadNode -> TODO()
+            is IrNode.PointerDereferenceNode -> TODO()
         }
 
         generatedNodes.add(sideEffectNode)
@@ -317,6 +322,12 @@ private class Lowerer(private val irGraph: IrGraph) {
                     currentBlock.addFirst(AsmIr.Move(destination, source))
                 }
             }
+
+            is IrNode.AllocateStructNode -> TODO()
+            is IrNode.FieldAccessNode -> TODO()
+            is IrNode.FieldDereferenceNode -> TODO()
+            is IrNode.LoadNode -> TODO()
+            is IrNode.PointerDereferenceNode -> TODO()
         }
     }
 

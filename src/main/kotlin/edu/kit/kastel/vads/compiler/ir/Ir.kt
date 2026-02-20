@@ -1,6 +1,7 @@
 package edu.kit.kastel.vads.compiler.ir
 
 import edu.kit.kastel.vads.compiler.parser.SymbolName
+import edu.kit.kastel.vads.compiler.typechecker.Type
 
 enum class SideEffectType {
     DIVISION_BY_ZERO_EXCEPTION
@@ -64,6 +65,30 @@ sealed interface IrNode {
         override val dataInputs: List<DataNode> = listOf()
     }
 
+    class AllocateStructNode(val type: Type.StructType) : DataNode {
+        override val dataInputs: List<DataNode> = listOf()
+    }
+
+    class StoreNode(val location: DataNode, val value: DataNode, override val sideEffect: SideEffectNode) : DataNodeConsumingNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(location, value)
+    }
+
+    class LoadNode(val location: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(location)
+    }
+
+    class FieldAccessNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(struct)
+    }
+
+    class FieldDereferenceNode(val struct: DataNode, val fieldName: SymbolName, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(struct)
+    }
+
+    class PointerDereferenceNode(val pointer: DataNode, override val sideEffect: SideEffectNode) : DataNode, SideEffectRelevantNode {
+        override val dataInputs: List<DataNode> = listOf(pointer)
+    }
+
     // Binary operations
     sealed interface BinaryOperationNode : DataNode {
         val left: DataNode
@@ -115,6 +140,10 @@ sealed interface IrNode {
     data class IntegerConstantNode(override val value: UInt) : ConstantNode<UInt>
 
     data class BooleanConstantNode(override val value: Boolean) : ConstantNode<Boolean>
+
+    object NullConstantNode : ConstantNode<Nothing> {
+        override val value: Nothing get() = throw UnsupportedOperationException("NullConstantNode does not have a value")
+    }
 
     // Control flow
     class ReturnNode(val result: DataNode, override val sideEffect: SideEffectNode, override val control: ControlNode) : DataNodeConsumingNode, SideEffectRelevantNode,
