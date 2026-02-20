@@ -78,3 +78,6 @@ These options can be passed as command-line arguments or set via environment var
 | `--overwrite-ir`   | `OVERWRITE_IR`   | Overwrite the IR file if it already exists.                  |
 | `--print-assembly` | `PRINT_ASSEMBLY` | Print the generated assembly.                                |
 
+## License
+
+MIT License. See [LICENSE](LICENSE) for details.
